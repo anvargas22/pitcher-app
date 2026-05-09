@@ -502,6 +502,8 @@ export async function buildPitcherRow(pitcher, date, oppKDays = 7) {
   row.avgH        = gameLog?.avgH        ?? null;
   row.kArr        = gameLog?.kArr        ?? [];
   row.hArr        = gameLog?.hArr        ?? [];
+  row.bbArr       = gameLog?.bbArr       ?? [];
+  row.outsArr     = gameLog?.outsArr     ?? [];
   row.oppPerStart = gameLog?.oppPerStart ?? [];
 
   // Expected Ks: pitcher K% × estimated BF (avg outs / 3 * 4.3)
@@ -596,7 +598,7 @@ export async function loadNotes(date) {
 }
 
 // ── Auto-grade result vs lines ───────────────────────────────────────────
-export function gradeResult(result, kLine, bbLine, outsLine) {
+export function gradeResult(result, kLine, bbLine, outsLine, haLine) {
   const grades = [];
 
   if (kLine && result.k !== undefined) {
@@ -610,9 +612,14 @@ export function gradeResult(result, kLine, bbLine, outsLine) {
     grades.push(`BB ${result.bb > bbLine ? "MORE" : "LESS"} ${bbLine} ${moreCashed || lessCashed ? "✅" : "❌"} (${result.bb}BB)`);
   }
 
+  if (haLine && result.hits !== undefined) {
+    const cashed = result.hits > haLine;
+    grades.push(`HA MORE ${haLine} ${cashed ? "✅ CASHED" : "❌ MISSED"} (${result.hits}H)`);
+  }
+
   if (outsLine && result.outs !== undefined) {
     const cashed = result.outs > outsLine;
-    grades.push(`OUTS MORE ${outsLine} ${cashed ? "✅ CASHED" : "❌ MISSED"} (${result.outs} outs)`);
+    grades.push(`PO MORE ${outsLine} ${cashed ? "✅ CASHED" : "❌ MISSED"} (${result.outs} outs)`);
   }
 
   return grades;
