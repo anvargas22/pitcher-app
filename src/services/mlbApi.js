@@ -393,6 +393,7 @@ export function suggestLock(row) {
 
 // ── Lock score (0-7) ─────────────────────────────────────────────────────
 export function calcLockScore(row, kLine = null) {
+  if (!row || row.pitcherK === undefined) return { score:0, maxScore:7, grade:"❌ FADE", signals:[] };
   let score = 0;
   const signals = [];
 
