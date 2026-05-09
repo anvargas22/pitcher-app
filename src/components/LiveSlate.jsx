@@ -3,6 +3,30 @@ import { fetchProbablePitchers, buildPitcherRow, calcLockScore, calcKHitRate, fe
 import { gradeK, gradeOpp, combinedKGrade, gradeScore, GRADE_COLORS, gradeBB, gradeOuts } from "../utils/grades";
 import { Pill, Dot, PCBadge } from "./Pill";
 
+// Mobile responsive styles injected once
+if (typeof document !== 'undefined' && !document.getElementById('mobile-styles')) {
+  const style = document.createElement('style');
+  style.id = 'mobile-styles';
+  style.textContent = `
+    @media (max-width: 768px) {
+      .stats-grid-5 { grid-template-columns: 1fr 1fr !important; }
+      .stats-grid-2 { grid-template-columns: 1fr !important; }
+      .controls-row { flex-direction: column !important; align-items: flex-start !important; }
+      .pitcher-table { font-size: 10px !important; }
+      .pitcher-table td { padding: 6px 4px !important; }
+      .k-avg-col { display: none !important; }
+      .hide-mobile { display: none !important; }
+      .lock-badge { font-size: 8px !important; }
+    }
+    @media (max-width: 480px) {
+      .stats-grid-5 { grid-template-columns: 1fr !important; }
+      .bb-col { display: none !important; }
+      .outs-col { display: none !important; }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 const STATUS_COLORS = {
   idle:    { bg:"#0f172a", border:"#334155" },
   loading: { bg:"#0f1f3d", border:"#1d4ed8" },
@@ -385,7 +409,7 @@ function AutoRow({ r, onUpdateNote, onToggleLock, kLine, onKLineChange }) {
             )}
 
             {/* Stats grid — 5 panels */}
-            <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr", gap:8, marginBottom:10}}>
+            <div className="stats-grid-5" style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr", gap:8, marginBottom:10}}>
 
               {/* K Matchup */}
               <div style={{background:"#0d1117", border:"1px solid #1e293b", borderRadius:10, padding:"10px 12px"}}>
@@ -459,7 +483,7 @@ function AutoRow({ r, onUpdateNote, onToggleLock, kLine, onKLineChange }) {
             </div>
 
             {/* K Trend + Opp Splits — full width row */}
-            <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10}}>
+            <div className="stats-grid-2" style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10}}>
               {/* K per last 5 starts visual */}
               <div style={{background:"#0d1117", border:"1px solid #1e293b", borderRadius:10, padding:"10px 12px"}}>
                 <div style={{color:"#475569", fontSize:9, letterSpacing:3, marginBottom:4}}>K PER LAST {r.kArr?.length || 5} STARTS</div>
@@ -658,9 +682,20 @@ export default function LiveSlate() {
 
   const updateKLine = useCallback((playerId, line) => {
     setKLines(prev => ({ ...prev, [playerId]: line }));
-    // Save permanently
+    // Save K line immediately and independently
     const row = rows.find(r => r.playerId === playerId);
-    if (row) saveNotePermanent(date, playerId, row.note || "", line, row.note?.includes("🔒"));
+    const note = row?.note || "";
+    const isLock = note.includes("🔒");
+    saveNotePermanent(date, playerId, note, line, isLock);
+  }, [date, rows]);
+
+  // Also auto-save when kLines change (debounced)
+  const saveKLineDebounced = useCallback((playerId, line) => {
+    const timer = setTimeout(() => {
+      const row = rows.find(r => r.playerId === playerId);
+      saveNotePermanent(date, playerId, row?.note || "", line, row?.note?.includes("🔒"));
+    }, 500);
+    return () => clearTimeout(timer);
   }, [date, rows]);
 
   // Pull results for all fetched pitchers
@@ -734,7 +769,7 @@ export default function LiveSlate() {
 
       {/* Controls */}
       <div style={{background:sc.bg, border:`1px solid ${sc.border}`, borderRadius:10, padding:"12px 14px", marginBottom:12}}>
-        <div style={{display:"flex", gap:8, alignItems:"flex-end", flexWrap:"wrap"}}>
+        <div className="controls-row" style={{display:"flex", gap:8, alignItems:"flex-end", flexWrap:"wrap"}}>
           <div style={{display:"flex", flexDirection:"column", gap:3}}>
             <label style={{color:"#475569", fontSize:9, letterSpacing:2}}>DATE</label>
             <input type="date" value={date} onChange={e=>setDate(e.target.value)}
@@ -835,12 +870,12 @@ export default function LiveSlate() {
 
       {rows.length > 0 && (
         <div style={{background:"#0d1117",border:"1px solid #1e293b",borderRadius:11,overflow:"hidden"}}>
-          <table style={{width:"100%",borderCollapse:"collapse"}}>
+          <table className="pitcher-table" style={{width:"100%",borderCollapse:"collapse"}}>
             <thead>
               <tr style={{background:"#111827",borderBottom:"2px solid #1e293b"}}>
                 {[["🔒","center"],["PITCHER","left"],["K GRADE","center"],["BB%","center"],["OUTS","center"],["K AVG","center"],["LOCK","center"],["RESULT","center"],["","center"]]
                   .map(([h,a]) => (
-                    <th key={h} style={{padding:"8px 6px",textAlign:a,color:"#475569",fontSize:9,letterSpacing:2,fontWeight:700}}>{h}</th>
+                    <th key={h} className={h==="K AVG"?"k-avg-col":h==="BB%"?"bb-col":h==="OUTS"?"outs-col":""} style={{padding:"8px 6px",textAlign:a,color:"#475569",fontSize:9,letterSpacing:2,fontWeight:700}}>{h}</th>
                   ))}
               </tr>
             </thead>
