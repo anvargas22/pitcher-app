@@ -130,6 +130,13 @@ export async function fetchPitcherGameLog(playerId, numStarts = 6) {
     const bbArr   = splits.map(s => parseInt(s.stat?.baseOnBalls || 0));
     const kArr    = splits.map(s => parseInt(s.stat?.strikeOuts || 0));
 
+    // Capture opponent team for each start
+    const oppPerStart = splits.map(s => {
+      const oppId = s.opponent?.id || null;
+      const oppAbb = oppId ? TEAM_ID_TO_ABB[oppId] : null;
+      return { abb: oppAbb, id: oppId, date: s.date };
+    });
+
     // Try multiple possible pitch count field names
     const pcArr = splits.map(s => {
       return parseInt(s.stat?.numberOfPitches || 0) ||
@@ -158,9 +165,21 @@ export async function fetchPitcherGameLog(playerId, numStarts = 6) {
     const maxK    = kArr.length ? Math.max(...kArr) : null;
     const minK    = kArr.length ? Math.min(...kArr) : null;
 
+    // Fetch opp K% for each start opponent (L10 window at time of game)
+    const oppKPerStart = await Promise.all(
+      oppPerStart.map(async (opp) => {
+        if (!opp.id) return null;
+        try {
+          const k = await fetchTeamOppK(opp.id, 10);
+          return { ...opp, oppK: k };
+        } catch { return { ...opp, oppK: null }; }
+      })
+    );
+
     return {
       avgOuts, hitRate, bbAvg, outsArr, bbArr, kArr,
       avgK, maxK, minK,
+      oppPerStart: oppKPerStart,
       numStarts: splits.length,
       pcTendency, avgPC, maxPC, minPC, ipCeiling,
       // expose raw splits for debugging
@@ -474,10 +493,11 @@ export async function buildPitcherRow(pitcher, date, oppKDays = 7) {
   row.oppKSplits  = oppKSplits;
 
   // K per start from game log
-  row.avgK  = gameLog?.avgK  ?? null;
-  row.maxK  = gameLog?.maxK  ?? null;
-  row.minK  = gameLog?.minK  ?? null;
-  row.kArr  = gameLog?.kArr  ?? [];
+  row.avgK       = gameLog?.avgK       ?? null;
+  row.maxK       = gameLog?.maxK       ?? null;
+  row.minK       = gameLog?.minK       ?? null;
+  row.kArr       = gameLog?.kArr       ?? [];
+  row.oppPerStart = gameLog?.oppPerStart ?? [];
 
   // Expected Ks: pitcher K% × estimated BF (avg outs / 3 * 4.3)
   const estIP = (gameLog?.avgOuts ?? 0) / 3;
@@ -489,3 +509,106 @@ export async function buildPitcherRow(pitcher, date, oppKDays = 7) {
 }
 
 // ── K line hit rate calculator ───────────────────────────────────────────
+
+// ── Results pull — fetch final line for a pitcher after game ─────────────
+export async function fetchPitcherResult(playerId, date) {
+  try {
+    const year = new Date(date).getFullYear();
+    const url = `${BASE}/people/${playerId}/stats?stats=gameLog&season=${year}&group=pitching`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    const splits = data.stats?.[0]?.splits || [];
+
+    // Find the game matching the date
+    const gameSplit = splits.find(s => {
+      const gameDate = s.date || s.game?.gameDate || "";
+      return gameDate.startsWith(date);
+    }) || splits[splits.length - 1]; // fallback to most recent
+
+    if (!gameSplit) return null;
+
+    const s = gameSplit.stat;
+    const ipToOuts = ip => {
+      const [full, frac="0"] = String(ip).split(".");
+      return parseInt(full)*3 + parseInt(frac);
+    };
+
+    const ip     = s.inningsPitched || "0.0";
+    const outs   = ipToOuts(ip);
+    const k      = parseInt(s.strikeOuts || 0);
+    const bb     = parseInt(s.baseOnBalls || 0);
+    const er     = parseInt(s.earnedRuns || 0);
+    const hits   = parseInt(s.hits || 0);
+    const pc     = parseInt(s.numberOfPitches || s.pitchesThrown || 0);
+    const win    = s.wins > 0;
+    const loss   = s.losses > 0;
+
+    return { ip, outs, k, bb, er, hits, pc, win, loss, date: gameSplit.date };
+  } catch { return null; }
+}
+
+// ── Save result to Netlify Blobs via serverless function ─────────────────
+export async function saveResult(date, playerId, result) {
+  try {
+    const res = await fetch("/api/saveResult", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date, playerId, result }),
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
+// ── Load saved results for a date ────────────────────────────────────────
+export async function loadResults(date) {
+  try {
+    const res = await fetch(`/api/getResults?date=${date}`);
+    const data = await res.json();
+    return data.results || [];
+  } catch { return []; }
+}
+
+// ── Save note permanently ────────────────────────────────────────────────
+export async function saveNotePermanent(date, playerId, note, kLine, isLock) {
+  try {
+    const res = await fetch("/api/saveNote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date, playerId, note, kLine, isLock }),
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
+// ── Load saved notes for a date ──────────────────────────────────────────
+export async function loadNotes(date) {
+  try {
+    const res = await fetch(`/api/saveNote?date=${date}`);
+    const data = await res.json();
+    return data.notes || [];
+  } catch { return []; }
+}
+
+// ── Auto-grade result vs lines ───────────────────────────────────────────
+export function gradeResult(result, kLine, bbLine, outsLine) {
+  const grades = [];
+
+  if (kLine && result.k !== undefined) {
+    const cashed = result.k > kLine;
+    grades.push(`K MORE ${kLine} ${cashed ? "✅ CASHED" : "❌ MISSED"} (${result.k}K)`);
+  }
+
+  if (bbLine && result.bb !== undefined) {
+    const moreCashed = result.bb > bbLine;
+    const lessCashed = result.bb < bbLine;
+    grades.push(`BB ${result.bb > bbLine ? "MORE" : "LESS"} ${bbLine} ${moreCashed || lessCashed ? "✅" : "❌"} (${result.bb}BB)`);
+  }
+
+  if (outsLine && result.outs !== undefined) {
+    const cashed = result.outs > outsLine;
+    grades.push(`OUTS MORE ${outsLine} ${cashed ? "✅ CASHED" : "❌ MISSED"} (${result.outs} outs)`);
+  }
+
+  return grades;
+}
