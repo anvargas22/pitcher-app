@@ -21,7 +21,8 @@ export default function App() {
   const allRows = useMemo(() => [...ALL_DATA, ...extra], [extra]);
 
   const displayed = useMemo(() => {
-    let rows = view === "all" ? allRows : allRows.filter(r => r.date === VIEW_MAP[view]);
+    let rows = view === "all" ? allRows : allRows.filter(r => r && r.date === VIEW_MAP[view]);
+    rows = rows.filter(r => r && r.pitcherK !== undefined && r.oppK !== undefined);
     if (filter === "elite")   rows = rows.filter(r => combinedKGrade(gradeK(r.pitcherK), gradeOpp(r.oppK)) === "⭐⭐ ELITE");
     if (filter === "bb")      rows = rows.filter(r => r.bbPct !== undefined && gradeBB(r.bbPct) === "green");
     if (filter === "outs")    rows = rows.filter(r => r.outsAvg !== undefined && gradeOuts(r.outsAvg, r.outsHitRate) === "green");
