@@ -11,6 +11,26 @@ const VIEW_MAP = {
   "430":"4/30","429":"4/29","428":"4/28","427":"4/27","426":"4/26","425":"4/25","all":"all"
 };
 
+// Mobile styles for game log
+if (typeof document !== 'undefined' && !document.getElementById('app-mobile-styles')) {
+  const style = document.createElement('style');
+  style.id = 'app-mobile-styles';
+  style.textContent = `
+    @media (max-width: 768px) {
+      .date-nav { gap: 3px !important; }
+      .date-nav button { padding: 4px 6px !important; font-size: 9px !important; }
+      .filter-nav button { padding: 4px 6px !important; font-size: 9px !important; }
+      .game-log-table th, .game-log-table td { padding: 6px 4px !important; font-size: 10px !important; }
+      .expanded-grid { grid-template-columns: 1fr 1fr !important; }
+      h1 { font-size: 15px !important; }
+    }
+    @media (max-width: 480px) {
+      .date-nav button { padding: 3px 5px !important; font-size: 8px !important; }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 export default function App() {
   const [mode, setMode]         = useState("log");   // "log" | "live"
   const [extra, setExtra]       = useState([]);
@@ -100,7 +120,7 @@ export default function App() {
           </div>
 
           {/* Date nav */}
-          <div style={{ display:"flex", gap:5, marginBottom:8, flexWrap:"wrap" }}>
+          <div className="date-nav" style={{ display:"flex", gap:5, marginBottom:8, flexWrap:"wrap" }}>
             {btn("509","🔥 5/9")}{btn("508","5/8")}{btn("507","⭐ 5/7")}{btn("506","5/6")}{btn("505","5/5")}{btn("504","🔵 5/4")}
             {btn("503","5/3")}{btn("502","5/2")}{btn("501","5/1")}
             {btn("430","4/30")}{btn("429","4/29")}{btn("428","4/28")}
@@ -109,14 +129,14 @@ export default function App() {
           </div>
 
           {/* Filter nav */}
-          <div style={{ display:"flex", gap:5, marginBottom:12, flexWrap:"wrap" }}>
+          <div className="filter-nav" style={{ display:"flex", gap:5, marginBottom:12, flexWrap:"wrap" }}>
             {fbtn("all","ALL")}{fbtn("elite","⭐ K ELITE")}{fbtn("bb","🟢 BB")}
             {fbtn("outs","🟢 OUTS")}{fbtn("lock","🔒 LOCKS")}{fbtn("injured","🚨 SKIP")}
           </div>
 
           {/* Table */}
           <div style={{ background:"#0d1117", border:"1px solid #1e293b", borderRadius:11, overflow:"hidden", marginBottom:12 }}>
-            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <table className="game-log-table" style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead>
                 <tr style={{ background:"#111827", borderBottom:"2px solid #1e293b" }}>
                   {[["PITCHER","left"],["K GRADE","center"],["BB%","center"],["OUTS","center"],["","center"]]
