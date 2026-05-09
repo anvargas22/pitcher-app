@@ -167,14 +167,14 @@ export async function fetchPitcherGameLog(playerId, numStarts = 6) {
   } catch { return null; }
 }
 
-// ── 4. Opp K% L7 ────────────────────────────────────────────────────────
-export async function fetchTeamOppK(teamId) {
+// ── 4. Opp K% — supports L7 or L10 window ──────────────────────────────
+export async function fetchTeamOppK(teamId, days = 7) {
   try {
     const today = new Date();
-    const weekAgo = new Date(today);
-    weekAgo.setDate(today.getDate()-7);
+    const rangeStart = new Date(today);
+    rangeStart.setDate(today.getDate() - days);
     const year = today.getFullYear();
-    const url = `${BASE}/teams/${teamId}/stats?stats=byDateRange&startDate=${fmtDate(weekAgo)}&endDate=${fmtDate(today)}&group=hitting&season=${year}`;
+    const url = `${BASE}/teams/${teamId}/stats?stats=byDateRange&startDate=${fmtDate(rangeStart)}&endDate=${fmtDate(today)}&group=hitting&season=${year}`;
     const res = await fetch(url);
     const data = await res.json();
     const s = data.stats?.[0]?.splits?.[0]?.stat;
@@ -299,13 +299,13 @@ export function suggestLock(row) {
 }
 
 // ── 8. Build full row ────────────────────────────────────────────────────
-export async function buildPitcherRow(pitcher, date) {
+export async function buildPitcherRow(pitcher, date, oppKDays = 7) {
   const { playerId, name, opp, oppTeamId, venueTeam, gameTime } = pitcher;
 
   const [season, gameLog, oppK, injury, weather] = await Promise.all([
     fetchPitcherSeasonStats(playerId),
     fetchPitcherGameLog(playerId),
-    oppTeamId ? fetchTeamOppK(oppTeamId) : Promise.resolve(null),
+    oppTeamId ? fetchTeamOppK(oppTeamId, oppKDays) : Promise.resolve(null),
     fetchInjuryStatus(playerId),
     fetchWeather(venueTeam, gameTime),
   ]);
