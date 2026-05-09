@@ -59,7 +59,7 @@ export default function Row({ r, idx, expanded, onToggle }) {
       {expanded && (
         <tr style={{ borderBottom:"1px solid #1f2937", background:"#0a0f1a" }}>
           <td colSpan={5} style={{ padding:"10px 14px 14px" }}>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+            <div className="expanded-grid" style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
 
               {/* K Matchup */}
               <div style={{ background:"#0d1117", border:"1px solid #1e293b", borderRadius:10, padding:"10px 12px" }}>
@@ -70,7 +70,7 @@ export default function Row({ r, idx, expanded, onToggle }) {
                 </div>
                 <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
                   <span style={{ color:"#94a3b8", fontSize:10 }}>Opp K% L7</span>
-                  <Pill value={r.oppK.toFixed(1)} grade={og} suffix="%"/>
+                  <Pill value={r.oppK!=null?r.oppK.toFixed(1):"—"} grade={og} suffix={r.oppK!=null?"%":""}/>
                 </div>
                 <div style={{ display:"flex", justifyContent:"space-between" }}>
                   <span style={{ color:"#94a3b8", fontSize:10 }}>Grade</span>
