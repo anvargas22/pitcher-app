@@ -11,26 +11,6 @@ const VIEW_MAP = {
   "430":"4/30","429":"4/29","428":"4/28","427":"4/27","426":"4/26","425":"4/25","all":"all"
 };
 
-// Mobile styles for game log
-if (typeof document !== 'undefined' && !document.getElementById('app-mobile-styles')) {
-  const style = document.createElement('style');
-  style.id = 'app-mobile-styles';
-  style.textContent = `
-    @media (max-width: 768px) {
-      .date-nav { gap: 3px !important; }
-      .date-nav button { padding: 4px 6px !important; font-size: 9px !important; }
-      .filter-nav button { padding: 4px 6px !important; font-size: 9px !important; }
-      .game-log-table th, .game-log-table td { padding: 6px 4px !important; font-size: 10px !important; }
-      .expanded-grid { grid-template-columns: 1fr 1fr !important; }
-      h1 { font-size: 15px !important; }
-    }
-    @media (max-width: 480px) {
-      .date-nav button { padding: 3px 5px !important; font-size: 8px !important; }
-    }
-  `;
-  document.head.appendChild(style);
-}
-
 export default function App() {
   const [mode, setMode]         = useState("log");   // "log" | "live"
   const [extra, setExtra]       = useState([]);
