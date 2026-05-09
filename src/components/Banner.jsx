@@ -1,4 +1,17 @@
 export default function Banner({ view }) {
+  if (view === "509") return (
+    <div style={{ background:"#0a0614", border:"1px solid #7c3aed", borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
+      <div style={{ color:"#a78bfa", fontSize:9, letterSpacing:3, marginBottom:6 }}>🔥 5/9 TODAY — SPADE VERIFIED</div>
+      <div style={{ color:"#c4b5fd", fontSize:10, lineHeight:2.0 }}>
+        ⭐⭐ Burns vs HOU 28.6%/24.5% · Smith vs KC 34.8%/24.2% · Snell vs ATL 28.3%/28.7% 🔥 · Ashcraft vs SF 27.3%/22.9%<br/>
+        ⚠️ Strider vs LAD 31.6%/18.8% RED opp · Tolle vs TB 34.3%/17.7% RED opp · Schlittler vs MIL 29.3%/18.6% RED opp<br/>
+        ⚠️ Harrison vs NYY 29.2%/16.8% RED opp · Leiter vs CHC 26.2%/15.8% RED opp · Roupp vs PIT 27.0%/17.7% RED opp<br/>
+        ✅ Yesavage vs LAA 22.5%/28.1% · Arighetti vs CIN 24.8%/23.2% · Nola vs COL 24.8%/23.4% · Vasquez vs STL 22.4%/26.5%<br/>
+        ❌ Kochanowicz/Civale/Baz/Littell/Junk/Martinez/Freeland/Bibee/Castillo/Kay/May/Holmes/Kelly — FADE
+      </div>
+    </div>
+  );
+
   if (view === "508") return (
     <div style={{ background:"#0a0614", border:"1px solid #7c3aed", borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
       <div style={{ color:"#a78bfa", fontSize:9, letterSpacing:3, marginBottom:6 }}>🔥 5/8 TODAY — SPADE VERIFIED</div>
