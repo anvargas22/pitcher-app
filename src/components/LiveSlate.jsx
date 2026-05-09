@@ -3,30 +3,6 @@ import { fetchProbablePitchers, buildPitcherRow, calcLockScore, calcKHitRate, fe
 import { gradeK, gradeOpp, combinedKGrade, gradeScore, GRADE_COLORS, gradeBB, gradeOuts } from "../utils/grades";
 import { Pill, Dot, PCBadge } from "./Pill";
 
-// Mobile responsive styles injected once
-if (typeof document !== 'undefined' && !document.getElementById('mobile-styles')) {
-  const style = document.createElement('style');
-  style.id = 'mobile-styles';
-  style.textContent = `
-    @media (max-width: 768px) {
-      .stats-grid-5 { grid-template-columns: 1fr 1fr !important; }
-      .stats-grid-2 { grid-template-columns: 1fr !important; }
-      .controls-row { flex-direction: column !important; align-items: flex-start !important; }
-      .pitcher-table { font-size: 10px !important; }
-      .pitcher-table td { padding: 6px 4px !important; }
-      .k-avg-col { display: none !important; }
-      .hide-mobile { display: none !important; }
-      .lock-badge { font-size: 8px !important; }
-    }
-    @media (max-width: 480px) {
-      .stats-grid-5 { grid-template-columns: 1fr !important; }
-      .bb-col { display: none !important; }
-      .outs-col { display: none !important; }
-    }
-  `;
-  document.head.appendChild(style);
-}
-
 const STATUS_COLORS = {
   idle:    { bg:"#0f172a", border:"#334155" },
   loading: { bg:"#0f1f3d", border:"#1d4ed8" },
@@ -35,476 +11,182 @@ const STATUS_COLORS = {
 };
 
 function LockScoreBadge({ score, grade }) {
-  const col = grade.includes("🔒🔒") ? "#22c55e"
-    : grade.includes("🔒") ? "#4ade80"
-    : grade.includes("⚠️") ? "#eab308"
+  const col = grade?.includes("🔒🔒") ? "#22c55e"
+    : grade?.includes("🔒") ? "#4ade80"
+    : grade?.includes("⚠️") ? "#eab308"
     : "#ef4444";
-  const bg = grade.includes("🔒🔒") ? "#061a0a"
-    : grade.includes("🔒") ? "#0a1f0a"
-    : grade.includes("⚠️") ? "#1a1400"
-    : "#1a0505";
   return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:2 }}>
-      <div style={{ background:bg, border:`1px solid ${col}`, borderRadius:6, padding:"3px 8px", color:col, fontSize:9, fontWeight:700, whiteSpace:"nowrap" }}>
-        {grade}
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+      <div style={{background:"#0f172a",border:`1px solid ${col}`,borderRadius:6,padding:"3px 8px",color:col,fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>
+        {grade || "❌ FADE"}
       </div>
-      <div style={{ color:"#475569", fontSize:8 }}>{score}/7 signals</div>
+      <div style={{color:"#475569",fontSize:8}}>{score}/7</div>
     </div>
   );
 }
 
-function PropLineInput({ label, value, onChange, min=0, max=20, step=0.5, placeholder="e.g. 1.5" }) {
+function PropLineRow({ label, value, onChange, avg, suffix="" }) {
+  const hitRate = value && avg !== null ? null : null;
   return (
-    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:5 }}>
-      <span style={{ color:"#94a3b8", fontSize:10 }}>{label} line</span>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+      <span style={{color:"#94a3b8",fontSize:10}}>{label} line</span>
       <input
-        type="number" step={step} min={min} max={max}
-        value={value || ""}
-        onChange={e => onChange(parseFloat(e.target.value) || null)}
-        placeholder={placeholder}
-        style={{
-          background:"#0f172a", border:"1px solid #334155", color:"#f1f5f9",
-          borderRadius:5, padding:"3px 6px", width:60, fontSize:11,
-          fontFamily:"monospace", outline:"none", textAlign:"center",
-        }}
+        type="number" step="0.5" min="0"
+        value={value||""}
+        onChange={e=>onChange(parseFloat(e.target.value)||null)}
+        placeholder="line"
+        style={{background:"#0f172a",border:"1px solid #334155",color:"#f1f5f9",borderRadius:5,padding:"3px 6px",width:55,fontSize:11,fontFamily:"monospace",outline:"none",textAlign:"center"}}
       />
     </div>
   );
 }
 
-function PropHitRate({ arr, line, label, suffix="" }) {
-  if (!arr?.length || !line) return null;
-  const cleared = arr.filter(v => v > line).length;
-  const rate = Math.round((cleared / arr.length) * 100);
-  const col = rate >= 67 ? "#22c55e" : rate >= 40 ? "#eab308" : "#ef4444";
+function PropSection({ title, color, arr, line, avg, avgLabel, suffix, onLineChange }) {
+  const cleared = arr?.length && line ? arr.filter(v=>v>line).length : null;
+  const rate = cleared !== null ? Math.round((cleared/arr.length)*100) : null;
+  const rateCol = rate>=67?"#22c55e":rate>=40?"#eab308":"#ef4444";
   return (
-    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-      <span style={{ color:"#94a3b8", fontSize:9 }}>{label} hit rate vs {line}</span>
-      <span style={{ color:col, fontWeight:700, fontSize:10 }}>
-        {rate}% ({cleared}/{arr.length})
-      </span>
-    </div>
-  );
-}
-
-function PropLog({ arr, line, suffix="", color="#f1f5f9" }) {
-  if (!arr?.length) return null;
-  return (
-    <div style={{ display:"flex", gap:3, flexWrap:"wrap", marginBottom:6 }}>
-      {arr.map((v, i) => (
-        <span key={i} style={{
-          background: line && v > line ? "#061a0a" : "#0f172a",
-          border: `1px solid ${line && v > line ? "#16a34a" : "#1e293b"}`,
-          color: line && v > line ? "#4ade80" : "#64748b",
-          borderRadius:4, padding:"2px 5px", fontSize:10, fontWeight:700,
-        }}>{v}{suffix}</span>
-      ))}
-    </div>
-  );
-}
-
-function KLinePanel({ r, kLine, onKLineChange, bbLine, onBBLineChange, haLine, onHALineChange, poLine, onPOLineChange }) {
-  const lockInfo = calcLockScore(r, kLine);
-
-  return (
-    <div style={{ background:"#0d1117", border:"1px solid #1e293b", borderRadius:10, padding:"10px 12px" }}>
-      <div style={{ color:"#475569", fontSize:9, letterSpacing:3, marginBottom:8 }}>PRIZEPICKS LINE ANALYSIS</div>
-
-      {/* ── K LINE ── */}
-      <div style={{ background:"#060c14", borderRadius:6, padding:"6px 8px", marginBottom:8 }}>
-        <div style={{ color:"#3b82f6", fontSize:8, letterSpacing:2, marginBottom:4 }}>⚾ STRIKEOUTS</div>
-        {r.expectedK && (
-          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-            <span style={{ color:"#94a3b8", fontSize:9 }}>Expected</span>
-            <span style={{ color:"#a78bfa", fontWeight:700, fontSize:11 }}>~{r.expectedK}K</span>
-          </div>
-        )}
-        {r.avgK !== null && (
-          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-            <span style={{ color:"#94a3b8", fontSize:9 }}>Avg/start</span>
-            <span style={{ color:"#f1f5f9", fontWeight:700, fontSize:11 }}>{r.avgK}K <span style={{ color:"#475569", fontSize:8 }}>({r.minK}–{r.maxK})</span></span>
-          </div>
-        )}
-        <PropLineInput label="K" value={kLine} onChange={onKLineChange} max={15} placeholder="e.g. 4.5"/>
-        <PropHitRate arr={r.kArr} line={kLine} label="K"/>
-        <PropLog arr={r.kArr} line={kLine} suffix="K"/>
-      </div>
-
-      {/* ── BB LINE ── */}
-      <div style={{ background:"#060c14", borderRadius:6, padding:"6px 8px", marginBottom:8 }}>
-        <div style={{ color:"#eab308", fontSize:8, letterSpacing:2, marginBottom:4 }}>🎯 WALKS (BB)</div>
-        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-          <span style={{ color:"#94a3b8", fontSize:9 }}>Avg BB/start</span>
-          <span style={{ color:"#f1f5f9", fontWeight:700, fontSize:11 }}>{r.bbAvg?.toFixed(1) ?? "—"} BB</span>
-        </div>
-        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-          <span style={{ color:"#94a3b8", fontSize:9 }}>Season BB%</span>
-          <span style={{ color: r.bbPct >= 9 ? "#22c55e" : r.bbPct >= 6 ? "#eab308" : "#ef4444", fontWeight:700, fontSize:11 }}>{r.bbPct?.toFixed(1)}%</span>
-        </div>
-        <PropLineInput label="BB" value={bbLine} onChange={onBBLineChange} max={8} placeholder="e.g. 1.5"/>
-        <PropHitRate arr={r.bbArr} line={bbLine} label="BB"/>
-        <PropLog arr={r.bbArr} line={bbLine} suffix="BB"/>
-      </div>
-
-      {/* ── HITS ALLOWED LINE ── */}
-      <div style={{ background:"#060c14", borderRadius:6, padding:"6px 8px", marginBottom:8 }}>
-        <div style={{ color:"#ef4444", fontSize:8, letterSpacing:2, marginBottom:4 }}>🎯 HITS ALLOWED (HA)</div>
-        {r.avgH !== null && (
-          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-            <span style={{ color:"#94a3b8", fontSize:9 }}>Avg HA/start</span>
-            <span style={{ color: r.avgH >= 8 ? "#ef4444" : r.avgH >= 5 ? "#eab308" : "#22c55e", fontWeight:700, fontSize:11 }}>{r.avgH}H</span>
-          </div>
-        )}
-        <PropLineInput label="HA" value={haLine} onChange={onHALineChange} max={15} placeholder="e.g. 6.5"/>
-        <PropHitRate arr={r.hArr} line={haLine} label="HA"/>
-        <PropLog arr={r.hArr} line={haLine} suffix="H"/>
-      </div>
-
-      {/* ── PITCHER OUTS LINE ── */}
-      <div style={{ background:"#060c14", borderRadius:6, padding:"6px 8px", marginBottom:8 }}>
-        <div style={{ color:"#22c55e", fontSize:8, letterSpacing:2, marginBottom:4 }}>📊 PITCHER OUTS (PO)</div>
-        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-          <span style={{ color:"#94a3b8", fontSize:9 }}>Avg outs/start</span>
-          <span style={{ color: r.outsAvg >= 18 ? "#22c55e" : r.outsAvg >= 15 ? "#eab308" : "#ef4444", fontWeight:700, fontSize:11 }}>{r.outsAvg?.toFixed(1) ?? "—"}</span>
-        </div>
-        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-          <span style={{ color:"#94a3b8", fontSize:9 }}>Hit rate vs 17.5</span>
-          <span style={{ color: r.outsHitRate >= 67 ? "#22c55e" : r.outsHitRate >= 33 ? "#eab308" : "#ef4444", fontWeight:700, fontSize:11 }}>{r.outsHitRate}%</span>
-        </div>
-        <PropLineInput label="PO" value={poLine} onChange={onPOLineChange} max={27} placeholder="e.g. 17.5"/>
-        <PropHitRate arr={r.outsArr} line={poLine} label="PO"/>
-        <PropLog arr={r.outsArr} line={poLine} suffix=" outs"/>
-      </div>
-
-      {/* Lock score breakdown */}
-      <div style={{ background:"#060c14", border:"1px solid #1e293b", borderRadius:6, padding:"6px 8px" }}>
-        <div style={{ color:"#475569", fontSize:8, letterSpacing:2, marginBottom:4 }}>LOCK SCORE BREAKDOWN</div>
-        {lockInfo.signals.map((s, i) => (
-          <div key={i} style={{ color: s.startsWith("✅") ? "#4ade80" : s.startsWith("🔒") ? "#4ade80" : s.startsWith("⬜") ? "#475569" : "#f87171", fontSize:9, marginBottom:2 }}>
-            {s}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function PCStats({ r }) {
-  if (!r.avgPC) return <span style={{color:"#475569",fontSize:9}}>No PC data</span>;
-  const col = r.avgPC >= 90 ? "#22c55e" : r.avgPC >= 80 ? "#eab308" : "#ef4444";
-  return (
-    <div style={{display:"flex", flexDirection:"column", gap:3}}>
-      <div style={{display:"flex", justifyContent:"space-between"}}>
-        <span style={{color:"#94a3b8",fontSize:10}}>Avg PC</span>
-        <span style={{color:col, fontWeight:700, fontSize:12}}>{r.avgPC}</span>
-      </div>
-      <div style={{display:"flex", justifyContent:"space-between"}}>
-        <span style={{color:"#94a3b8",fontSize:10}}>Range</span>
-        <span style={{color:"#f1f5f9",fontSize:10}}>{r.minPC}–{r.maxPC}</span>
-      </div>
-      <div style={{display:"flex", justifyContent:"space-between"}}>
-        <span style={{color:"#94a3b8",fontSize:10}}>IP ceiling</span>
-        <span style={{color:col, fontWeight:700, fontSize:10}}>~{r.ipCeiling} IP est.</span>
-      </div>
-      <div style={{display:"flex", justifyContent:"space-between"}}>
-        <span style={{color:"#94a3b8",fontSize:10}}>Tendency</span>
-        <PCBadge tendency={r.pcTendency}/>
-      </div>
-    </div>
-  );
-}
-
-function WeatherBadge({ weather }) {
-  if (!weather) return null;
-  if (weather.isIndoor) return (
-    <span style={{background:"#1e293b", color:"#475569", borderRadius:4, padding:"2px 7px", fontSize:9, fontWeight:700}}>
-      🏟️ INDOOR
-    </span>
-  );
-  return (
-    <span style={{
-      background: weather.alert ? "#1a0a00" : "#0f172a",
-      color: weather.alert ? "#fbbf24" : "#64748b",
-      border: `1px solid ${weather.alert ? "#92400e" : "#1e293b"}`,
-      borderRadius:4, padding:"2px 7px", fontSize:9, fontWeight:700
-    }}>
-      {weather.summary}
-    </span>
-  );
-}
-
-function InjuryBadge({ injury }) {
-  if (!injury) return null;
-  const col = injury.severity === "high" ? "#dc2626" : "#eab308";
-  return (
-    <span style={{background:col, color:"#fff", borderRadius:4, padding:"2px 7px", fontSize:9, fontWeight:700}}>
-      {injury.flag}
-    </span>
-  );
-}
-
-
-function KTrendBar({ kArr }) {
-  if (!kArr?.length) return null;
-  const max = Math.max(...kArr, 1);
-  // Trend arrow
-  const last3avg = kArr.slice(-3).reduce((a,b)=>a+b,0) / Math.min(kArr.length, 3);
-  const first3avg = kArr.slice(0,3).reduce((a,b)=>a+b,0) / Math.min(kArr.length, 3);
-  const trend = last3avg > first3avg + 0.5 ? "↗️ Rising"
-    : last3avg < first3avg - 0.5 ? "↘️ Falling"
-    : "→ Stable";
-  const trendCol = trend.includes("↗️") ? "#22c55e" : trend.includes("↘️") ? "#ef4444" : "#94a3b8";
-
-  return (
-    <div style={{marginTop:8}}>
-      <div style={{display:"flex", justifyContent:"space-between", marginBottom:4}}>
-        <span style={{color:"#475569", fontSize:9, letterSpacing:2}}>K TREND (LAST {kArr.length} STARTS)</span>
-        <span style={{color:trendCol, fontSize:9, fontWeight:700}}>{trend}</span>
-      </div>
-      <div style={{display:"flex", gap:4, alignItems:"flex-end", height:36}}>
-        {kArr.map((k, i) => {
-          const h = Math.max(Math.round((k/max)*32), 4);
-          const isLast = i === kArr.length - 1;
-          return (
-            <div key={i} style={{display:"flex", flexDirection:"column", alignItems:"center", gap:2, flex:1}}>
-              <span style={{color:"#f1f5f9", fontSize:8, fontWeight:700}}>{k}</span>
-              <div style={{
-                width:"100%", height:h,
-                background: isLast ? "#3b82f6" : "#1e293b",
-                border: `1px solid ${isLast ? "#60a5fa" : "#334155"}`,
-                borderRadius:2,
-              }}/>
-            </div>
-          );
-        })}
-      </div>
-      <div style={{display:"flex", gap:8, marginTop:4}}>
-        <span style={{color:"#475569", fontSize:8}}>High: {Math.max(...kArr)}K</span>
-        <span style={{color:"#475569", fontSize:8}}>Low: {Math.min(...kArr)}K</span>
-        <span style={{color:"#475569", fontSize:8}}>Avg: {(kArr.reduce((a,b)=>a+b,0)/kArr.length).toFixed(1)}K</span>
-      </div>
-    </div>
-  );
-}
-
-function OppKSplitsPanel({ splits, oppK, oppKDays }) {
-  if (!splits && !oppK) return (
-    <div style={{color:"#475569", fontSize:9}}>Loading opp splits...</div>
-  );
-
-  const k7 = splits?.k7 ?? oppK;
-  const k30 = splits?.k30;
-  const handK = splits?.handK;
-  const trend = splits?.trend ?? "→ Stable";
-  const hand = splits?.pitcherHand;
-  const trendCol = trend.includes("↗️") ? "#22c55e" : trend.includes("↘️") ? "#ef4444" : "#94a3b8";
-
-  const gradeColor = (k) => {
-    if (!k) return "#475569";
-    return k >= 22 ? "#22c55e" : k >= 18 ? "#eab308" : "#ef4444";
-  };
-
-  return (
-    <div>
-      <div style={{display:"flex", justifyContent:"space-between", marginBottom:5}}>
-        <span style={{color:"#94a3b8", fontSize:10}}>L7 K%</span>
-        <span style={{color:gradeColor(k7), fontWeight:700, fontSize:11}}>{k7?.toFixed(1) ?? "—"}%</span>
-      </div>
-      {k30 && (
-        <div style={{display:"flex", justifyContent:"space-between", marginBottom:5}}>
-          <span style={{color:"#94a3b8", fontSize:10}}>L30 K%</span>
-          <span style={{color:gradeColor(k30), fontWeight:700, fontSize:11}}>{k30.toFixed(1)}%</span>
+    <div style={{background:"#060c14",borderRadius:6,padding:"6px 8px",marginBottom:8}}>
+      <div style={{color,fontSize:8,letterSpacing:2,marginBottom:4}}>{title}</div>
+      {avg!==null && avg!==undefined && (
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+          <span style={{color:"#94a3b8",fontSize:9}}>{avgLabel}</span>
+          <span style={{color:"#f1f5f9",fontWeight:700,fontSize:10}}>{avg}{suffix}</span>
         </div>
       )}
-      {handK && (
-        <div style={{display:"flex", justifyContent:"space-between", marginBottom:5}}>
-          <span style={{color:"#94a3b8", fontSize:10}}>vs {hand === "L" ? "LHP" : "RHP"}</span>
-          <span style={{color:gradeColor(handK), fontWeight:700, fontSize:11}}>{handK.toFixed(1)}%</span>
+      <PropLineRow label={title.split(" ")[0]} value={line} onChange={onLineChange} avg={avg} suffix={suffix}/>
+      {rate!==null && (
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+          <span style={{color:"#94a3b8",fontSize:9}}>Hit rate vs {line}</span>
+          <span style={{color:rateCol,fontWeight:700,fontSize:10}}>{rate}% ({cleared}/{arr?.length})</span>
         </div>
       )}
-      <div style={{display:"flex", justifyContent:"space-between", marginBottom:5}}>
-        <span style={{color:"#94a3b8", fontSize:10}}>Trend</span>
-        <span style={{color:trendCol, fontWeight:700, fontSize:10}}>{trend}</span>
-      </div>
-      {k7 && k30 && (
-        <div style={{
-          marginTop:4, padding:"3px 6px", borderRadius:4,
-          background: k7 > k30 ? "#061a0a" : k7 < k30 - 2 ? "#1a0505" : "#0f172a",
-          border: `1px solid ${k7 > k30 ? "#16a34a" : k7 < k30 - 2 ? "#dc2626" : "#334155"}`,
-          color: k7 > k30 ? "#4ade80" : k7 < k30 - 2 ? "#f87171" : "#64748b",
-          fontSize:9, fontWeight:700,
-        }}>
-          {k7 > k30 ? "🔥 Opp striking out MORE lately" 
-            : k7 < k30 - 2 ? "📉 Opp making more contact lately"
-            : "📊 Opp K rate stable"}
+      {arr?.length>0 && (
+        <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:4}}>
+          {arr.map((v,i)=>(
+            <span key={i} style={{
+              background:line&&v>line?"#061a0a":"#0f172a",
+              border:`1px solid ${line&&v>line?"#16a34a":"#1e293b"}`,
+              color:line&&v>line?"#4ade80":"#64748b",
+              borderRadius:4,padding:"2px 5px",fontSize:10,fontWeight:700
+            }}>{v}{suffix}</span>
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-function AutoRow({ r, onUpdateNote, onToggleLock, kLine, onKLineChange, bbLine, onBBLineChange, haLine, onHALineChange, poLine, onPOLineChange }) {
+function AutoRow({ r, onUpdateNote, onToggleLock, kLine, onKLine, bbLine, onBBLine, haLine, onHALine, poLine, onPOLine }) {
   const [expanded, setExpanded] = useState(false);
-  const [editingNote, setEditingNote] = useState(false);
-  const [noteVal, setNoteVal] = useState(r.note || "");
+  const [editNote, setEditNote] = useState(false);
+  const [noteVal, setNoteVal] = useState(r.note||"");
 
-  const pg       = gradeK(r.pitcherK);
-  const og       = gradeOpp(r.oppK);
-  const kGrade   = combinedKGrade(pg, og);
-  const bg       = gradeBB(r.bbPct);
-  const og2      = gradeOuts(r.outsAvg, r.outsHitRate);
-  const isLock   = noteVal?.includes("🔒");
-  const hasInjury = !!r.injury;
-  const hasWeatherAlert = r.weather?.alert;
+  if (!r || r.pitcherK===undefined) return null;
+
+  const pg     = gradeK(r.pitcherK);
+  const og     = gradeOpp(r.oppK||0);
+  const kGrade = combinedKGrade(pg, og);
+  const bg     = gradeBB(r.bbPct||0);
+  const og2    = gradeOuts(r.outsAvg||0, r.outsHitRate||0);
+  const isLock = noteVal?.includes("🔒");
   const lockInfo = calcLockScore(r, kLine);
 
-  const saveNote = () => { onUpdateNote(r.playerId, noteVal); setEditingNote(false); };
-
-  const rowBg = hasInjury ? "#1a0500"
-    : isLock ? "#061a0a"
-    : expanded ? "#0d1628"
-    : "transparent";
+  const saveNote = () => { onUpdateNote(r.playerId, noteVal); setEditNote(false); };
 
   return (
     <>
-      <tr style={{ borderBottom: expanded?"none":"1px solid #1f2937", background:rowBg, cursor:"pointer" }}>
-        <td style={{padding:"6px 4px", textAlign:"center", width:28}} onClick={() => onToggleLock(r.playerId)}>
-          <span style={{fontSize:14, cursor:"pointer", opacity: isLock?1:0.25}}>🔒</span>
+      <tr style={{borderBottom:expanded?"none":"1px solid #1f2937",background:isLock?"#061a0a":expanded?"#0d1628":"transparent",cursor:"pointer"}}>
+        <td style={{padding:"6px 4px",textAlign:"center",width:28}} onClick={()=>onToggleLock(r.playerId)}>
+          <span style={{fontSize:14,opacity:isLock?1:0.25}}>🔒</span>
         </td>
-
-        <td style={{padding:"8px 8px"}} onClick={() => setExpanded(!expanded)}>
-          <div style={{display:"flex", alignItems:"center", gap:5, flexWrap:"wrap"}}>
-            <span style={{color: hasInjury?"#ff9944": isLock?"#4ade80":"#f1f5f9", fontWeight:700, fontSize:13}}>
-              {r.pitcher}
-            </span>
-            {hasInjury && <InjuryBadge injury={r.injury}/>}
-            {hasWeatherAlert && <WeatherBadge weather={r.weather}/>}
-            <span style={{background:"#1d4ed8", color:"#fff", borderRadius:3, padding:"1px 5px", fontSize:8, fontWeight:700}}>AUTO</span>
-          </div>
-          <div style={{color:"#475569", fontSize:10, marginTop:2}}>
-            vs {r.opp} · {r.date}
-            {r.weather && !r.weather.alert && !r.weather.isIndoor && (
-              <span style={{color:"#334155", marginLeft:6}}>{r.weather.summary}</span>
-            )}
+        <td style={{padding:"8px"}} onClick={()=>setExpanded(!expanded)}>
+          <div style={{color:isLock?"#4ade80":"#f1f5f9",fontWeight:700,fontSize:13}}>{r.pitcher}</div>
+          <div style={{color:"#475569",fontSize:10}}>vs {r.opp} · {r.date}
+            {r.weather&&!r.weather.alert&&!r.weather.isIndoor&&<span style={{marginLeft:6}}>{r.weather.summary}</span>}
+            {r.weather?.alert&&<span style={{color:"#fbbf24",marginLeft:6}}>{r.weather.summary}</span>}
+            {r.weather?.isIndoor&&<span style={{color:"#475569",marginLeft:6}}>🏟️ Indoor</span>}
           </div>
         </td>
-
-        <td style={{padding:"9px 6px", textAlign:"center"}} onClick={() => setExpanded(!expanded)}>
-          <div style={{marginBottom:3}}>
-            <Pill value={r.pitcherK.toFixed(1)} grade={pg} suffix="%"/>
-          </div>
-          <div style={{color:GRADE_COLORS[kGrade], fontWeight:700, fontSize:9}}>{kGrade}</div>
+        <td style={{padding:"9px 6px",textAlign:"center"}} onClick={()=>setExpanded(!expanded)}>
+          <Pill value={r.pitcherK.toFixed(1)} grade={pg} suffix="%"/>
+          <div style={{color:GRADE_COLORS[kGrade],fontWeight:700,fontSize:9,marginTop:2}}>{kGrade}</div>
         </td>
-
-        <td style={{padding:"9px 6px", textAlign:"center"}} onClick={() => setExpanded(!expanded)}>
+        <td style={{padding:"9px 6px",textAlign:"center"}} onClick={()=>setExpanded(!expanded)}>
           <Dot grade={bg} label="BB"/>
-          <div style={{color:bg==="green"?"#4ade80":bg==="yellow"?"#facc15":"#f87171", fontSize:9, fontWeight:700, marginTop:2}}>
-            {r.bbPct.toFixed(1)}%
-          </div>
+          <div style={{color:bg==="green"?"#4ade80":bg==="yellow"?"#facc15":"#f87171",fontSize:9,fontWeight:700,marginTop:2}}>{(r.bbPct||0).toFixed(1)}%</div>
         </td>
-
-        <td style={{padding:"9px 6px", textAlign:"center"}} onClick={() => setExpanded(!expanded)}>
+        <td style={{padding:"9px 6px",textAlign:"center"}} onClick={()=>setExpanded(!expanded)}>
           <Dot grade={og2} label="OUTS"/>
-          <div style={{color:og2==="green"?"#4ade80":og2==="yellow"?"#facc15":"#f87171", fontSize:9, fontWeight:700, marginTop:2}}>
-            {r.outsAvg > 0 ? r.outsAvg.toFixed(1) : "—"}
-          </div>
+          <div style={{color:og2==="green"?"#4ade80":og2==="yellow"?"#facc15":"#f87171",fontSize:9,fontWeight:700,marginTop:2}}>{r.outsAvg>0?r.outsAvg.toFixed(1):"—"}</div>
         </td>
-
-        {/* K avg + expected */}
-        <td style={{padding:"9px 6px", textAlign:"center"}} onClick={() => setExpanded(!expanded)}>
-          {r.avgK !== null ? (
-            <>
-              <div style={{color:"#f1f5f9", fontWeight:700, fontSize:11}}>{r.avgK}K</div>
-              {r.expectedK && <div style={{color:"#7c3aed", fontSize:8}}>~{r.expectedK} exp</div>}
-            </>
-          ) : <span style={{color:"#1e293b", fontSize:9}}>—</span>}
+        <td style={{padding:"9px 6px",textAlign:"center"}} onClick={()=>setExpanded(!expanded)}>
+          {r.avgK!==null&&r.avgK!==undefined?<><div style={{color:"#f1f5f9",fontWeight:700,fontSize:11}}>{r.avgK}K</div>{r.expectedK&&<div style={{color:"#7c3aed",fontSize:8}}>~{r.expectedK}</div>}</>:<span style={{color:"#1e293b"}}>—</span>}
         </td>
-
-        {/* Lock score */}
-        <td style={{padding:"9px 6px", textAlign:"center"}} onClick={() => setExpanded(!expanded)}>
+        <td style={{padding:"9px 6px",textAlign:"center"}} onClick={()=>setExpanded(!expanded)}>
           <LockScoreBadge score={lockInfo.score} grade={lockInfo.grade}/>
         </td>
-
-        {/* Result badge on row */}
-        <td style={{padding:"9px 6px", textAlign:"center"}} onClick={() => setExpanded(!expanded)}>
-          {r.result ? (
-            <div style={{
-              fontSize:9, fontWeight:700,
-              color: r.result.grades?.some(g=>g.includes("✅")) ? "#4ade80" : "#f87171"
-            }}>
-              {r.result.k}K {r.result.grades?.some(g=>g.includes("✅")) ? "✅" : "❌"}
-            </div>
-          ) : <span style={{color:"#1e293b", fontSize:9}}>—</span>}
-        </td>
-        <td style={{padding:"9px 8px", textAlign:"center", color:"#3b82f6", fontSize:14}} onClick={() => setExpanded(!expanded)}>
+        <td style={{padding:"9px 8px",textAlign:"center",color:"#3b82f6",fontSize:14}} onClick={()=>setExpanded(!expanded)}>
           {expanded?"▲":"▼"}
         </td>
       </tr>
 
       {expanded && (
-        <tr style={{borderBottom:"1px solid #1f2937", background:"#0a0f1a"}}>
-          <td colSpan={9} style={{padding:"10px 14px 14px"}}>
+        <tr style={{borderBottom:"1px solid #1f2937",background:"#0a0f1a"}}>
+          <td colSpan={8} style={{padding:"10px 14px 14px"}}>
 
-            {(hasInjury || hasWeatherAlert) && (
-              <div style={{marginBottom:10, display:"flex", gap:6, flexWrap:"wrap"}}>
-                {hasInjury && (
-                  <div style={{background:"#1a0500", border:"1px solid #dc2626", borderRadius:8, padding:"6px 10px", color:"#f87171", fontSize:10, fontWeight:700}}>
-                    🚨 {r.injury.flag} — Verify before playing any props
-                  </div>
-                )}
-                {hasWeatherAlert && (
-                  <div style={{background:"#1a1000", border:"1px solid #92400e", borderRadius:8, padding:"6px 10px", color:"#fbbf24", fontSize:10, fontWeight:700}}>
-                    {r.weather.summary} — Weather may affect game
-                  </div>
-                )}
+            {/* Injury alert */}
+            {r.injury && (
+              <div style={{background:"#1a0500",border:"1px solid #dc2626",borderRadius:8,padding:"6px 10px",marginBottom:8,color:"#f87171",fontSize:10,fontWeight:700}}>
+                🚨 {r.injury.flag} — Verify before playing props
               </div>
             )}
 
-            {/* Stats grid — 5 panels */}
-            <div className="stats-grid-5" style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr", gap:8, marginBottom:10}}>
+            {/* Stats grid */}
+            <div className="stats-grid-5" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:8,marginBottom:10}}>
 
               {/* K Matchup */}
-              <div style={{background:"#0d1117", border:"1px solid #1e293b", borderRadius:10, padding:"10px 12px"}}>
-                <div style={{color:"#475569", fontSize:9, letterSpacing:3, marginBottom:8}}>K MATCHUP</div>
-                <div style={{display:"flex", justifyContent:"space-between", marginBottom:4}}>
+              <div style={{background:"#0d1117",border:"1px solid #1e293b",borderRadius:10,padding:"10px 12px"}}>
+                <div style={{color:"#475569",fontSize:9,letterSpacing:3,marginBottom:8}}>K MATCHUP</div>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                   <span style={{color:"#94a3b8",fontSize:10}}>Pitcher K%</span>
                   <Pill value={r.pitcherK.toFixed(1)} grade={pg} suffix="%"/>
                 </div>
-                <div style={{display:"flex", justifyContent:"space-between", marginBottom:4}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                   <span style={{color:"#94a3b8",fontSize:10}}>Opp K% L{r.oppKDays||7}</span>
                   <Pill value={r.oppK>0?r.oppK.toFixed(1):"—"} grade={og} suffix={r.oppK>0?"%":""}/>
                 </div>
-                <div style={{display:"flex", justifyContent:"space-between", marginBottom:4}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                   <span style={{color:"#94a3b8",fontSize:10}}>Grade</span>
-                  <span style={{color:GRADE_COLORS[kGrade], fontWeight:700, fontSize:10}}>{kGrade}</span>
+                  <span style={{color:GRADE_COLORS[kGrade],fontWeight:700,fontSize:10}}>{kGrade}</span>
                 </div>
-                <div style={{display:"flex", justifyContent:"space-between"}}>
+                <div style={{display:"flex",justifyContent:"space-between"}}>
                   <span style={{color:"#94a3b8",fontSize:10}}>ERA · {r.gs} GS</span>
                   <span style={{color:"#f1f5f9",fontWeight:700,fontSize:10}}>{r.era?.toFixed(2)??"—"}</span>
                 </div>
               </div>
 
-              {/* K Line Analysis */}
-              <KLinePanel
-                r={r}
-                kLine={kLine} onKLineChange={onKLineChange}
-                bbLine={bbLine} onBBLineChange={onBBLineChange}
-                haLine={haLine} onHALineChange={onHALineChange}
-                poLine={poLine} onPOLineChange={onPOLineChange}
-              />
+              {/* PrizePicks Lines */}
+              <div style={{background:"#0d1117",border:"1px solid #1e293b",borderRadius:10,padding:"10px 12px"}}>
+                <div style={{color:"#475569",fontSize:9,letterSpacing:3,marginBottom:8}}>PRIZEPICKS LINES</div>
+                <PropSection title="⚾ K" color="#3b82f6" arr={r.kArr} line={kLine} avg={r.avgK} avgLabel="Avg K/start" suffix="K" onLineChange={onKLine}/>
+                <PropSection title="🎯 BB" color="#eab308" arr={r.bbArr} line={bbLine} avg={r.bbAvg} avgLabel="Avg BB/start" suffix="BB" onLineChange={onBBLine}/>
+                <PropSection title="🎯 HA" color="#ef4444" arr={r.hArr} line={haLine} avg={r.avgH} avgLabel="Avg H/start" suffix="H" onLineChange={onHALine}/>
+                <PropSection title="📊 PO" color="#22c55e" arr={r.outsArr} line={poLine} avg={r.outsAvg} avgLabel="Avg outs" suffix="" onLineChange={onPOLine}/>
+              </div>
 
               {/* Walks */}
-              <div style={{background:"#0d1117", border:"1px solid #1e293b", borderRadius:10, padding:"10px 12px"}}>
-                <div style={{color:"#475569", fontSize:9, letterSpacing:3, marginBottom:8}}>WALKS</div>
-                <div style={{display:"flex", justifyContent:"space-between", marginBottom:4}}>
+              <div style={{background:"#0d1117",border:"1px solid #1e293b",borderRadius:10,padding:"10px 12px"}}>
+                <div style={{color:"#475569",fontSize:9,letterSpacing:3,marginBottom:8}}>WALKS</div>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                   <span style={{color:"#94a3b8",fontSize:10}}>Season BB%</span>
-                  <Pill value={r.bbPct.toFixed(1)} grade={bg} suffix="%"/>
+                  <Pill value={(r.bbPct||0).toFixed(1)} grade={bg} suffix="%"/>
                 </div>
-                <div style={{display:"flex", justifyContent:"space-between", marginBottom:4}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                   <span style={{color:"#94a3b8",fontSize:10}}>Avg BBs</span>
-                  <span style={{color:"#f1f5f9",fontWeight:700,fontSize:12}}>{r.bbAvg.toFixed(1)}</span>
+                  <span style={{color:"#f1f5f9",fontWeight:700,fontSize:12}}>{r.bbAvg?.toFixed(1)??"—"}</span>
                 </div>
-                <div style={{display:"flex", justifyContent:"space-between"}}>
+                <div style={{display:"flex",justifyContent:"space-between"}}>
                   <span style={{color:"#94a3b8",fontSize:10}}>Play</span>
                   <span style={{color:bg==="green"?"#4ade80":bg==="yellow"?"#facc15":"#f87171",fontWeight:700,fontSize:10}}>
                     {bg==="green"?"MORE ↑":bg==="red"?"LESS ↓":"NEUTRAL"} {r.bbLine}
@@ -513,130 +195,160 @@ function AutoRow({ r, onUpdateNote, onToggleLock, kLine, onKLineChange, bbLine, 
               </div>
 
               {/* Outs */}
-              <div style={{background:"#0d1117", border:"1px solid #1e293b", borderRadius:10, padding:"10px 12px"}}>
-                <div style={{color:"#475569", fontSize:9, letterSpacing:3, marginBottom:8}}>OUTS / IP</div>
-                <div style={{display:"flex", justifyContent:"space-between", marginBottom:4}}>
+              <div style={{background:"#0d1117",border:"1px solid #1e293b",borderRadius:10,padding:"10px 12px"}}>
+                <div style={{color:"#475569",fontSize:9,letterSpacing:3,marginBottom:8}}>OUTS / IP</div>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                   <span style={{color:"#94a3b8",fontSize:10}}>Avg outs</span>
                   <Pill value={r.outsAvg>0?r.outsAvg.toFixed(1):"N/A"} grade={og2}/>
                 </div>
-                <div style={{display:"flex", justifyContent:"space-between", marginBottom:4}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                   <span style={{color:"#94a3b8",fontSize:10}}>Hit rate</span>
-                  <span style={{color:r.outsHitRate>=67?"#4ade80":r.outsHitRate>=33?"#facc15":"#f87171",fontWeight:700,fontSize:12}}>
-                    {r.outsHitRate}%
-                  </span>
+                  <span style={{color:r.outsHitRate>=67?"#4ade80":r.outsHitRate>=33?"#facc15":"#f87171",fontWeight:700,fontSize:12}}>{r.outsHitRate}%</span>
                 </div>
-                <div style={{display:"flex", justifyContent:"space-between"}}>
-                  <span style={{color:"#94a3b8",fontSize:10}}>Play</span>
-                  <span style={{color:og2==="green"?"#4ade80":og2==="yellow"?"#facc15":"#f87171",fontWeight:700,fontSize:10}}>
-                    {og2==="green"?"MORE ↑":og2==="red"?"LESS ↓":"NEUTRAL"} {r.outsLine}
-                  </span>
+                <div style={{display:"flex",justifyContent:"space-between"}}>
+                  <span style={{color:"#94a3b8",fontSize:10}}>PC tend.</span>
+                  <PCBadge tendency={r.pcTendency}/>
                 </div>
               </div>
 
               {/* Pitch Count */}
-              <div style={{background:"#0d1117", border:"1px solid #1e293b", borderRadius:10, padding:"10px 12px"}}>
-                <div style={{color:"#475569", fontSize:9, letterSpacing:3, marginBottom:8}}>PITCH COUNT</div>
-                <PCStats r={r}/>
+              <div style={{background:"#0d1117",border:"1px solid #1e293b",borderRadius:10,padding:"10px 12px"}}>
+                <div style={{color:"#475569",fontSize:9,letterSpacing:3,marginBottom:8}}>PITCH COUNT</div>
+                {r.avgPC ? (
+                  <>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                      <span style={{color:"#94a3b8",fontSize:10}}>Avg PC</span>
+                      <span style={{color:r.avgPC>=90?"#22c55e":r.avgPC>=80?"#eab308":"#ef4444",fontWeight:700,fontSize:12}}>{r.avgPC}</span>
+                    </div>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                      <span style={{color:"#94a3b8",fontSize:10}}>Range</span>
+                      <span style={{color:"#f1f5f9",fontSize:10}}>{r.minPC}–{r.maxPC}</span>
+                    </div>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                      <span style={{color:"#94a3b8",fontSize:10}}>IP ceiling</span>
+                      <span style={{color:"#a78bfa",fontWeight:700,fontSize:10}}>~{r.ipCeiling} IP</span>
+                    </div>
+                    <div style={{display:"flex",justifyContent:"space-between"}}>
+                      <span style={{color:"#94a3b8",fontSize:10}}>Tendency</span>
+                      <PCBadge tendency={r.pcTendency}/>
+                    </div>
+                  </>
+                ) : <span style={{color:"#475569",fontSize:9}}>No PC data</span>}
               </div>
             </div>
 
-            {/* K Trend + Opp Splits — full width row */}
-            <div className="stats-grid-2" style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10}}>
-              {/* K per last 5 starts visual */}
-              <div style={{background:"#0d1117", border:"1px solid #1e293b", borderRadius:10, padding:"10px 12px"}}>
-                <div style={{color:"#475569", fontSize:9, letterSpacing:3, marginBottom:4}}>K PER LAST {r.kArr?.length || 5} STARTS</div>
-                <div style={{display:"flex", gap:4, alignItems:"center", flexWrap:"wrap", marginBottom:4}}>
-                  {r.kArr?.map((k, i) => {
-                    const isLast = i === (r.kArr.length - 1);
-                    const kLineVal = kLine;
-                    const cleared = kLineVal ? k > kLineVal : null;
+            {/* K log + opp splits */}
+            <div className="stats-grid-2" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+
+              {/* K per start log */}
+              <div style={{background:"#0d1117",border:"1px solid #1e293b",borderRadius:10,padding:"10px 12px"}}>
+                <div style={{color:"#475569",fontSize:9,letterSpacing:3,marginBottom:6}}>K PER LAST {r.kArr?.length||6} STARTS</div>
+                <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:8}}>
+                  {r.kArr?.map((k,i)=>{
+                    const isLast = i===r.kArr.length-1;
+                    const cleared = kLine ? k>kLine : null;
+                    const opp = r.oppPerStart?.[i];
+                    const oppK = opp?.oppK;
+                    const h = r.hArr?.[i];
+                    const oppGrade = oppK>=22?"#22c55e":oppK>=18?"#eab308":oppK?"#ef4444":"#475569";
+                    const kCol = isLast?"#60a5fa":cleared===true?"#4ade80":cleared===false?"#f87171":"#f1f5f9";
+                    const hCol = h>=8?"#ef4444":h>=5?"#eab308":"#22c55e";
                     return (
                       <div key={i} style={{
-                        background: isLast ? "#0f1f3d"
-                          : cleared === true ? "#061a0a"
-                          : cleared === false ? "#1a0505"
-                          : "#0f172a",
-                        border: `1px solid ${isLast ? "#3b82f6" : cleared === true ? "#16a34a" : cleared === false ? "#dc2626" : "#334155"}`,
-                        borderRadius:5, padding:"4px 8px", textAlign:"center", minWidth:32,
+                        display:"flex",alignItems:"center",justifyContent:"space-between",
+                        background:isLast?"#0f1f3d":cleared===true?"#061a0a":cleared===false?"#1a0505":"#0f172a",
+                        border:`1px solid ${isLast?"#3b82f6":cleared===true?"#16a34a":cleared===false?"#dc2626":"#1e293b"}`,
+                        borderRadius:5,padding:"4px 8px",
                       }}>
-                        <div style={{color: isLast ? "#60a5fa" : cleared === true ? "#4ade80" : cleared === false ? "#f87171" : "#f1f5f9", fontWeight:700, fontSize:13}}>{k}K</div>
-                        <div style={{color:"#475569", fontSize:7}}>S{i+1}</div>
+                        <div style={{display:"flex",alignItems:"center",gap:5}}>
+                          <span style={{color:"#475569",fontSize:8,minWidth:14}}>S{i+1}</span>
+                          <span style={{color:kCol,fontWeight:700,fontSize:12}}>{k}K</span>
+                          {h!==undefined&&<span style={{color:hCol,fontSize:10,fontWeight:700}}>{h}H</span>}
+                          {opp?.abb&&<span style={{color:"#94a3b8",fontSize:9}}>vs {opp.abb}</span>}
+                        </div>
+                        {oppK!=null?<span style={{color:oppGrade,fontWeight:700,fontSize:9}}>{oppK.toFixed(1)}% {oppK>=22?"🟢":oppK>=18?"🟡":"🔴"}</span>
+                          :opp?.abb?<span style={{color:"#334155",fontSize:8}}>loading...</span>:null}
                       </div>
                     );
                   })}
                 </div>
-                {r.kArr?.length > 0 && <KTrendBar kArr={r.kArr}/>}
-                {kLine && (
-                  <div style={{marginTop:6, color:"#475569", fontSize:9}}>
-                    🟩 = cleared {kLine} line · 🟥 = missed · 🔵 = most recent
+                {r.avgH!==null&&r.avgH!==undefined&&(
+                  <div style={{color:"#475569",fontSize:9}}>
+                    Avg H allowed: <span style={{color:r.avgH>=8?"#ef4444":r.avgH>=5?"#eab308":"#22c55e",fontWeight:700}}>{r.avgH}H</span>
                   </div>
                 )}
               </div>
 
-              {/* Opp batting K% splits */}
-              <div style={{background:"#0d1117", border:"1px solid #1e293b", borderRadius:10, padding:"10px 12px"}}>
-                <div style={{color:"#475569", fontSize:9, letterSpacing:3, marginBottom:8}}>
-                  OPP BATTER K% · {r.pitcherHand === "L" ? "🔵 LHP" : r.pitcherHand === "R" ? "🔴 RHP" : ""} matchup
+              {/* Opp K splits */}
+              <div style={{background:"#0d1117",border:"1px solid #1e293b",borderRadius:10,padding:"10px 12px"}}>
+                <div style={{color:"#475569",fontSize:9,letterSpacing:3,marginBottom:8}}>
+                  OPP BATTER K% · {r.pitcherHand==="L"?"🔵 LHP":r.pitcherHand==="R"?"🔴 RHP":""}
                 </div>
-                <OppKSplitsPanel splits={r.oppKSplits} oppK={r.oppK} oppKDays={oppKDays}/>
+                {r.oppKSplits ? (
+                  <>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                      <span style={{color:"#94a3b8",fontSize:10}}>L7 K%</span>
+                      <span style={{color:r.oppKSplits.k7>=22?"#22c55e":r.oppKSplits.k7>=18?"#eab308":"#ef4444",fontWeight:700,fontSize:11}}>{r.oppKSplits.k7?.toFixed(1)??"—"}%</span>
+                    </div>
+                    {r.oppKSplits.k30&&(
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                        <span style={{color:"#94a3b8",fontSize:10}}>L30 K%</span>
+                        <span style={{color:r.oppKSplits.k30>=22?"#22c55e":r.oppKSplits.k30>=18?"#eab308":"#ef4444",fontWeight:700,fontSize:11}}>{r.oppKSplits.k30.toFixed(1)}%</span>
+                      </div>
+                    )}
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                      <span style={{color:"#94a3b8",fontSize:10}}>Trend</span>
+                      <span style={{color:r.oppKSplits.trend?.includes("↗️")?"#22c55e":r.oppKSplits.trend?.includes("↘️")?"#ef4444":"#94a3b8",fontWeight:700,fontSize:10}}>{r.oppKSplits.trend}</span>
+                    </div>
+                    {r.oppKSplits.k7&&r.oppKSplits.k30&&(
+                      <div style={{marginTop:4,padding:"3px 6px",borderRadius:4,
+                        background:r.oppKSplits.k7>r.oppKSplits.k30?"#061a0a":r.oppKSplits.k7<r.oppKSplits.k30-2?"#1a0505":"#0f172a",
+                        border:`1px solid ${r.oppKSplits.k7>r.oppKSplits.k30?"#16a34a":r.oppKSplits.k7<r.oppKSplits.k30-2?"#dc2626":"#334155"}`,
+                        color:r.oppKSplits.k7>r.oppKSplits.k30?"#4ade80":r.oppKSplits.k7<r.oppKSplits.k30-2?"#f87171":"#64748b",
+                        fontSize:9,fontWeight:700}}>
+                        {r.oppKSplits.k7>r.oppKSplits.k30?"🔥 Opp striking out MORE lately":r.oppKSplits.k7<r.oppKSplits.k30-2?"📉 Opp making more contact":"📊 Opp K rate stable"}
+                      </div>
+                    )}
+                  </>
+                ):<span style={{color:"#475569",fontSize:9}}>Loading splits...</span>}
               </div>
             </div>
 
+            {/* Lock score */}
+            <div style={{background:"#060c14",border:"1px solid #1e293b",borderRadius:8,padding:"8px 12px",marginBottom:8}}>
+              <div style={{color:"#475569",fontSize:9,letterSpacing:3,marginBottom:6}}>LOCK SCORE BREAKDOWN</div>
+              {lockInfo.signals.map((s,i)=>(
+                <div key={i} style={{color:s.startsWith("✅")?"#4ade80":s.startsWith("⬜")?"#475569":"#f87171",fontSize:9,marginBottom:2}}>{s}</div>
+              ))}
+            </div>
+
             {/* Weather */}
-            {r.weather && (
-              <div style={{background:"#060c14", border:`1px solid ${r.weather.alert?"#92400e":"#1e293b"}`, borderRadius:8, padding:"6px 12px", marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"center"}}>
-                <div style={{color:"#475569", fontSize:9, letterSpacing:2}}>WEATHER · {r.weather.isIndoor?"INDOOR":"OUTDOOR"}</div>
-                <div style={{color:r.weather.alert?"#fbbf24":"#64748b", fontSize:10}}>{r.weather.summary}</div>
+            {r.weather&&(
+              <div style={{background:"#060c14",border:`1px solid ${r.weather.alert?"#92400e":"#1e293b"}`,borderRadius:8,padding:"6px 12px",marginBottom:8,display:"flex",justifyContent:"space-between"}}>
+                <span style={{color:"#475569",fontSize:9}}>WEATHER</span>
+                <span style={{color:r.weather.alert?"#fbbf24":"#64748b",fontSize:10}}>{r.weather.summary}</span>
               </div>
             )}
 
-            {/* Result display if available */}
-            {r.result && (
-              <div style={{
-                background: r.result.grades?.some(g=>g.includes("✅")) ? "#061a0a" : "#1a0505",
-                border: `1px solid ${r.result.grades?.some(g=>g.includes("✅")) ? "#16a34a" : "#dc2626"}`,
-                borderRadius:8, padding:"8px 12px", marginBottom:8,
-              }}>
-                <div style={{color:"#475569", fontSize:9, letterSpacing:3, marginBottom:4}}>FINAL RESULT</div>
-                <div style={{color:"#f1f5f9", fontWeight:700, fontSize:11}}>
-                  {r.result.ip}IP · {r.result.hits}H · {r.result.er}ER · {r.result.bb}BB · {r.result.k}K
-                  {r.result.pc ? ` · ${r.result.pc}pc` : ""}
-                </div>
-                {r.result.grades?.map((g,i) => (
-                  <div key={i} style={{
-                    color: g.includes("✅") ? "#4ade80" : "#f87171",
-                    fontSize:10, fontWeight:700, marginTop:4,
-                  }}>{g}</div>
-                ))}
-              </div>
-            )}
-
-            {/* Note editor */}
-            <div style={{background:"#060c14", border:"1px solid #1e293b", borderRadius:8, padding:"8px 12px"}}>
-              <div style={{color:"#475569", fontSize:9, letterSpacing:3, marginBottom:6}}>YOUR NOTES / EDGE LAYER</div>
-              {editingNote ? (
-                <div style={{display:"flex", gap:6, alignItems:"flex-start"}}>
-                  <textarea
-                    value={noteVal}
-                    onChange={e => setNoteVal(e.target.value)}
-                    rows={3}
-                    style={{flex:1, background:"#0f172a", border:"1px solid #334155", color:"#f1f5f9", borderRadius:5, padding:"6px 8px", fontSize:10, fontFamily:"monospace", resize:"vertical", outline:"none"}}
-                    placeholder="Spade K% · injury context · PC limit · line value · lock reasoning..."
-                    autoFocus
-                  />
-                  <div style={{display:"flex", flexDirection:"column", gap:4}}>
+            {/* Notes */}
+            <div style={{background:"#060c14",border:"1px solid #1e293b",borderRadius:8,padding:"8px 12px"}}>
+              <div style={{color:"#475569",fontSize:9,letterSpacing:3,marginBottom:6}}>YOUR NOTES</div>
+              {editNote?(
+                <div style={{display:"flex",gap:6,alignItems:"flex-start"}}>
+                  <textarea value={noteVal} onChange={e=>setNoteVal(e.target.value)} rows={3}
+                    style={{flex:1,background:"#0f172a",border:"1px solid #334155",color:"#f1f5f9",borderRadius:5,padding:"6px 8px",fontSize:10,fontFamily:"monospace",resize:"vertical",outline:"none"}}
+                    placeholder="Spade data · injury context · lock reasoning..." autoFocus/>
+                  <div style={{display:"flex",flexDirection:"column",gap:4}}>
                     <button onClick={saveNote} style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:5,padding:"5px 10px",cursor:"pointer",fontSize:10,fontWeight:700}}>SAVE</button>
-                    <button onClick={() => {setNoteVal(r.note||"");setEditingNote(false);}} style={{background:"#374151",color:"#9ca3af",border:"none",borderRadius:5,padding:"5px 10px",cursor:"pointer",fontSize:10}}>CANCEL</button>
+                    <button onClick={()=>{setNoteVal(r.note||"");setEditNote(false);}} style={{background:"#374151",color:"#9ca3af",border:"none",borderRadius:5,padding:"5px 10px",cursor:"pointer",fontSize:10}}>CANCEL</button>
                   </div>
                 </div>
-              ) : (
-                <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8}}>
-                  <div style={{color:noteVal?"#64748b":"#1e293b", fontSize:10, fontStyle:"italic", flex:1}}>
-                    {noteVal || "No notes — click EDIT to add Spade data · injury context · lock reasoning"}
+              ):(
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                  <div style={{color:noteVal?"#64748b":"#1e293b",fontSize:10,fontStyle:"italic",flex:1}}>
+                    {noteVal||"No notes — click EDIT to add context"}
                   </div>
-                  <button onClick={() => setEditingNote(true)} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>
-                    ✏️ EDIT
-                  </button>
+                  <button onClick={()=>setEditNote(true)} style={{background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:9,fontWeight:700}}>✏️ EDIT</button>
                 </div>
               )}
             </div>
@@ -648,316 +360,186 @@ function AutoRow({ r, onUpdateNote, onToggleLock, kLine, onKLineChange, bbLine, 
 }
 
 export default function LiveSlate() {
-  const [date, setDate]         = useState(() => new Date().toISOString().split("T")[0]);
+  const [date, setDate]         = useState(()=>new Date().toISOString().split("T")[0]);
   const [oppKDays, setOppKDays] = useState(7);
   const [rows, setRows]         = useState([]);
-  const [kLines, setKLines]     = useState({});  // playerId → K line
-  const [bbLines, setBBLines]   = useState({});  // playerId → BB line
-  const [haLines, setHALines]   = useState({});  // playerId → HA line
-  const [poLines, setPOLines]   = useState({});  // playerId → PO line
-  const [results, setResults]   = useState({});  // playerId → result data
-  const [pulling, setPulling]   = useState(false);
-  const [pullStatus, setPullStatus] = useState("");
+  const [kLines, setKLines]     = useState({});
+  const [bbLines, setBBLines]   = useState({});
+  const [haLines, setHALines]   = useState({});
+  const [poLines, setPOLines]   = useState({});
+  const [results, setResults]   = useState({});
   const [status, setStatus]     = useState("idle");
   const [error, setError]       = useState("");
-  const [progress, setProgress] = useState({ done:0, total:0 });
+  const [progress, setProgress] = useState({done:0,total:0});
+  const [pulling, setPulling]   = useState(false);
+  const [pullStatus, setPullStatus] = useState("");
 
-  const handleFetch = useCallback(async () => {
-    setStatus("loading");
-    setError("");
-    setRows([]);
-    setProgress({ done:0, total:0 });
+  const handleFetch = useCallback(async()=>{
+    setStatus("loading"); setError(""); setRows([]); setProgress({done:0,total:0});
     try {
       const probables = await fetchProbablePitchers(date);
-      if (!probables.length) {
-        setError(`No probable pitchers found for ${date}. MLB may not have posted them yet.`);
-        setStatus("error");
-        return;
-      }
-      setProgress({ done:0, total:probables.length });
-      const CHUNK = 4;
-      for (let i = 0; i < probables.length; i += CHUNK) {
-        const chunk = probables.slice(i, i + CHUNK);
-        const results = await Promise.all(chunk.map(p => buildPitcherRow(p, date, oppKDays)));
-        const valid = results.filter(Boolean);
-        setRows(prev => {
-          const existing = new Set(prev.map(r => r.playerId));
-          const newOnes = valid.filter(r => !existing.has(r.playerId));
-          return [...prev, ...newOnes].sort((a,b) =>
-            gradeScore(combinedKGrade(gradeK(b.pitcherK), gradeOpp(b.oppK))) -
-            gradeScore(combinedKGrade(gradeK(a.pitcherK), gradeOpp(a.oppK)))
+      if (!probables.length) { setError(`No probable pitchers for ${date} yet.`); setStatus("error"); return; }
+      setProgress({done:0,total:probables.length});
+      const CHUNK=4;
+      for (let i=0;i<probables.length;i+=CHUNK) {
+        const chunk=probables.slice(i,i+CHUNK);
+        const results=await Promise.all(chunk.map(p=>buildPitcherRow(p,date,oppKDays)));
+        const valid=results.filter(Boolean);
+        setRows(prev=>{
+          const existing=new Set(prev.map(r=>r.playerId));
+          const newOnes=valid.filter(r=>!existing.has(r.playerId));
+          return [...prev,...newOnes].sort((a,b)=>
+            gradeScore(combinedKGrade(gradeK(b.pitcherK),gradeOpp(b.oppK)))-
+            gradeScore(combinedKGrade(gradeK(a.pitcherK),gradeOpp(a.oppK)))
           );
         });
-        setProgress({ done:Math.min(i+CHUNK, probables.length), total:probables.length });
+        setProgress({done:Math.min(i+CHUNK,probables.length),total:probables.length});
       }
       setStatus("done");
-
-      // Load any saved notes and results for this date
-      const [savedNotes, savedResults] = await Promise.all([
-        loadNotes(date),
-        loadResults(date),
-      ]);
-
-      // Apply saved notes back to rows
+      const [savedNotes,savedResults]=await Promise.all([loadNotes(date),loadResults(date)]);
       if (savedNotes.length) {
-        setRows(prev => prev.map(r => {
-          const saved = savedNotes.find(n => n.playerId === r.playerId);
-          if (saved) return { ...r, note: saved.note || r.note };
-          return r;
-        }));
-        const savedKLines = {};
-        savedNotes.forEach(n => { if (n.kLine) savedKLines[n.playerId] = n.kLine; });
-        if (Object.keys(savedKLines).length) setKLines(prev => ({...prev, ...savedKLines}));
+        setRows(prev=>prev.map(r=>{const s=savedNotes.find(n=>n.playerId===r.playerId);return s?{...r,note:s.note||r.note}:r;}));
+        const kl={};savedNotes.forEach(n=>{if(n.kLine)kl[n.playerId]=n.kLine;});
+        if (Object.keys(kl).length) setKLines(prev=>({...prev,...kl}));
       }
-
-      // Apply saved results
       if (savedResults.length) {
-        const resultsMap = {};
-        savedResults.forEach(r => { resultsMap[r.playerId] = r.result; });
-        setResults(resultsMap);
+        const rm={};savedResults.forEach(r=>{rm[r.playerId]=r.result;});
+        setResults(rm);
       }
+    } catch(err) { setError(`Fetch failed: ${err.message}`); setStatus("error"); }
+  },[date,oppKDays]);
 
-    } catch(err) {
-      setError(`Fetch failed: ${err.message}`);
-      setStatus("error");
-    }
-  }, [date, oppKDays]);
+  const updateNote=useCallback((playerId,note)=>{
+    setRows(prev=>prev.map(r=>r.playerId===playerId?{...r,note}:r));
+    const kLine=kLines[playerId];
+    saveNotePermanent(date,playerId,note,kLine,note?.includes("🔒"));
+  },[date,kLines]);
 
-  const updateNote = useCallback((playerId, note) => {
-    setRows(prev => prev.map(r => r.playerId===playerId ? {...r, note} : r));
-    // Save permanently
-    const kLine = kLines[playerId];
-    saveNotePermanent(date, playerId, note, kLine, note?.includes("🔒"));
-  }, [date, kLines]);
-
-  const toggleLock = useCallback((playerId) => {
-    setRows(prev => prev.map(r => {
-      if (r.playerId !== playerId) return r;
-      const hasLock = r.note?.includes("🔒");
-      const note = hasLock
-        ? (r.note||"").replace(/🔒\s*/g,"").trim()
-        : "🔒 " + (r.note||"").trim();
-      return {...r, note};
+  const toggleLock=useCallback((playerId)=>{
+    setRows(prev=>prev.map(r=>{
+      if(r.playerId!==playerId)return r;
+      const hasLock=r.note?.includes("🔒");
+      const note=hasLock?(r.note||"").replace(/🔒\s*/g,"").trim():"🔒 "+(r.note||"").trim();
+      return{...r,note};
     }));
-  }, []);
+  },[]);
 
-  const updateKLine = useCallback((playerId, line) => {
-    setKLines(prev => ({ ...prev, [playerId]: line }));
-    const row = rows.find(r => r.playerId === playerId);
-    saveNotePermanent(date, playerId, row?.note || "", line, row?.note?.includes("🔒"));
-  }, [date, rows]);
+  const updateKLine=useCallback((playerId,line)=>{
+    setKLines(prev=>({...prev,[playerId]:line}));
+    const row=rows.find(r=>r.playerId===playerId);
+    saveNotePermanent(date,playerId,row?.note||"",line,row?.note?.includes("🔒"));
+  },[date,rows]);
 
-  const updateBBLine = useCallback((playerId, line) => {
-    setBBLines(prev => ({ ...prev, [playerId]: line }));
-  }, []);
+  const updateBBLine=useCallback((playerId,line)=>setBBLines(prev=>({...prev,[playerId]:line})),[]);
+  const updateHALine=useCallback((playerId,line)=>setHALines(prev=>({...prev,[playerId]:line})),[]);
+  const updatePOLine=useCallback((playerId,line)=>setPOLines(prev=>({...prev,[playerId]:line})),[]);
 
-  const updateHALine = useCallback((playerId, line) => {
-    setHALines(prev => ({ ...prev, [playerId]: line }));
-  }, []);
-
-  const updatePOLine = useCallback((playerId, line) => {
-    setPOLines(prev => ({ ...prev, [playerId]: line }));
-  }, []);
-
-  // Pull results for all fetched pitchers
-  const handlePullResults = useCallback(async () => {
-    if (!rows.length) return;
-    setPulling(true);
-    setPullStatus("Pulling results...");
-
-    let cashed = 0, missed = 0, total = 0;
-
-    for (const r of rows) {
-      const result = await fetchPitcherResult(r.playerId, date);
-      if (!result) continue;
+  const handlePullResults=useCallback(async()=>{
+    if(!rows.length)return;
+    setPulling(true); setPullStatus("Pulling results...");
+    let cashed=0,missed=0,total=0;
+    for(const r of rows){
+      const result=await fetchPitcherResult(r.playerId,date);
+      if(!result)continue;
       total++;
-
-      const kLine = kLines[r.playerId];
-      const bbLineVal = bbLines[r.playerId] || r.bbLine;
-      const haLineVal = haLines[r.playerId];
-      const poLineVal = poLines[r.playerId] || r.outsLine;
-      const grades = gradeResult(result, kLine, bbLineVal, poLineVal, haLineVal);
-
-      const resultObj = { ...result, grades, kLine };
-      setResults(prev => ({ ...prev, [r.playerId]: resultObj }));
-
-      // Count cashed/missed
-      grades.forEach(g => {
-        if (g.includes("✅")) cashed++;
-        if (g.includes("❌")) missed++;
-      });
-
-      // Build result note
-      const resultNote = `RESULT: ${result.ip}IP ${result.hits}H ${result.er}ER ${result.bb}BB ${result.k}K${result.pc ? ` ${result.pc}pc` : ""} — ${grades.join(" · ")}`;
-
-      // Save to database
-      await saveResult(date, r.playerId, resultObj);
-
-      // Update note in row
-      setRows(prev => prev.map(row => {
-        if (row.playerId !== r.playerId) return row;
-        const existingNote = row.note || "";
-        const newNote = existingNote.includes("RESULT:")
-          ? existingNote.replace(/RESULT:.*$/, resultNote)
-          : (existingNote ? existingNote + " | " + resultNote : resultNote);
-        saveNotePermanent(date, r.playerId, newNote, kLine, newNote.includes("🔒"));
-        return { ...row, note: newNote };
+      const kLine=kLines[r.playerId];
+      const grades=gradeResult(result,kLine,bbLines[r.playerId]||r.bbLine,poLines[r.playerId]||r.outsLine,haLines[r.playerId]);
+      const resultObj={...result,grades,kLine};
+      setResults(prev=>({...prev,[r.playerId]:resultObj}));
+      grades.forEach(g=>{if(g.includes("✅"))cashed++;if(g.includes("❌"))missed++;});
+      const resultNote=`RESULT: ${result.ip}IP ${result.hits}H ${result.er}ER ${result.bb}BB ${result.k}K${result.pc?` ${result.pc}pc`:""} — ${grades.join(" · ")}`;
+      await saveResult(date,r.playerId,resultObj);
+      setRows(prev=>prev.map(row=>{
+        if(row.playerId!==r.playerId)return row;
+        const existing=row.note||"";
+        const newNote=existing.includes("RESULT:")?existing.replace(/RESULT:.*$/,resultNote):(existing?existing+" | "+resultNote:resultNote);
+        saveNotePermanent(date,r.playerId,newNote,kLine,newNote.includes("🔒"));
+        return{...row,note:newNote};
       }));
     }
-
-    setPullStatus(`✅ ${total} results pulled · ${cashed} cashed · ${missed} missed`);
+    setPullStatus(`✅ ${total} results · ${cashed} cashed · ${missed} missed`);
     setPulling(false);
-  }, [rows, date, kLines]);
+  },[rows,date,kLines,bbLines,haLines,poLines]);
 
-  const sc = STATUS_COLORS[status];
-  const eliteCount = rows.filter(r => combinedKGrade(gradeK(r.pitcherK),gradeOpp(r.oppK))==="⭐⭐ ELITE").length;
-  const lockCount  = rows.filter(r => r.note?.includes("🔒")).length;
-  const hardLocks  = rows.filter(r => {
-    const kLine = kLines[r.playerId];
-    const ls = calcLockScore(r, kLine);
-    return ls.score >= 6;
-  }).length;
+  const sc=STATUS_COLORS[status];
+  const eliteCount=rows.filter(r=>r&&combinedKGrade(gradeK(r.pitcherK),gradeOpp(r.oppK||0))==="⭐⭐ ELITE").length;
+  const lockCount=rows.filter(r=>r?.note?.includes("🔒")).length;
+  const hardLocks=rows.filter(r=>{if(!r)return false;const ls=calcLockScore(r,kLines[r.playerId]);return ls.score>=6;}).length;
 
   return (
-    <div style={{background:"#080d14", minHeight:"100vh", padding:"16px 12px"}}>
+    <div style={{background:"#080d14",minHeight:"100vh",padding:"16px 12px",fontFamily:"monospace"}}>
       <div style={{marginBottom:16}}>
-        <div style={{color:"#3b82f6", fontSize:9, letterSpacing:4, marginBottom:3}}>LIVE AUTO-FETCH · MLB STATS API</div>
-        <h1 style={{color:"#f1f5f9", fontSize:18, fontWeight:900, margin:0}}>🔄 SEMI-AUTO RESEARCH</h1>
-        <div style={{color:"#475569", fontSize:10, marginTop:2}}>
-          Auto: K% · BB% · Outs · Opp K% · Pitch Count · K Line Analysis · Lock Score · Weather
-        </div>
-        <div style={{color:"#1d4ed8", fontSize:9, marginTop:3, background:"#0f172a", borderRadius:4, padding:"4px 8px", display:"inline-block"}}>
-          ℹ️ IL pitchers won't appear — MLB removes them from probable starters automatically. Day-to-day pitchers get a 🚨 flag.
+        <div style={{color:"#3b82f6",fontSize:9,letterSpacing:4,marginBottom:3}}>LIVE AUTO-FETCH · MLB STATS API</div>
+        <h1 style={{color:"#f1f5f9",fontSize:18,fontWeight:900,margin:0}}>🔄 SEMI-AUTO RESEARCH</h1>
+        <div style={{color:"#475569",fontSize:10,marginTop:2}}>Auto: K% · BB% · Outs · Opp K% · PC · K/BB/HA/PO Lines · Lock Score · Weather</div>
+        <div style={{color:"#1d4ed8",fontSize:9,marginTop:3,background:"#0f172a",borderRadius:4,padding:"4px 8px",display:"inline-block"}}>
+          ℹ️ IL pitchers won't appear — MLB removes them from probable starters automatically. Day-to-day get a 🚨 flag.
         </div>
       </div>
 
-      {/* Controls */}
-      <div style={{background:sc.bg, border:`1px solid ${sc.border}`, borderRadius:10, padding:"12px 14px", marginBottom:12}}>
-        <div className="controls-row" style={{display:"flex", gap:8, alignItems:"flex-end", flexWrap:"wrap"}}>
-          <div style={{display:"flex", flexDirection:"column", gap:3}}>
-            <label style={{color:"#475569", fontSize:9, letterSpacing:2}}>DATE</label>
+      <div style={{background:sc.bg,border:`1px solid ${sc.border}`,borderRadius:10,padding:"12px 14px",marginBottom:12}}>
+        <div style={{display:"flex",gap:8,alignItems:"flex-end",flexWrap:"wrap"}}>
+          <div style={{display:"flex",flexDirection:"column",gap:3}}>
+            <label style={{color:"#475569",fontSize:9,letterSpacing:2}}>DATE</label>
             <input type="date" value={date} onChange={e=>setDate(e.target.value)}
               style={{background:"#0f172a",border:"1px solid #334155",color:"#f1f5f9",borderRadius:5,padding:"5px 8px",fontSize:11,fontFamily:"monospace",outline:"none"}}/>
           </div>
-
-          <div style={{display:"flex", flexDirection:"column", gap:3}}>
-            <label style={{color:"#475569", fontSize:9, letterSpacing:2}}>OPP K% WINDOW</label>
-            <div style={{display:"flex", gap:4}}>
-              {[7,10].map(d => (
-                <button key={d} onClick={() => setOppKDays(d)} style={{
-                  background: oppKDays===d?"#7c3aed":"#1e293b",
-                  color: oppKDays===d?"#fff":"#94a3b8",
+          <div style={{display:"flex",flexDirection:"column",gap:3}}>
+            <label style={{color:"#475569",fontSize:9,letterSpacing:2}}>OPP K% WINDOW</label>
+            <div style={{display:"flex",gap:4}}>
+              {[7,10].map(d=>(
+                <button key={d} onClick={()=>setOppKDays(d)} style={{
+                  background:oppKDays===d?"#7c3aed":"#1e293b",color:oppKDays===d?"#fff":"#94a3b8",
                   border:`1px solid ${oppKDays===d?"#7c3aed":"#334155"}`,
-                  borderRadius:5, padding:"5px 10px", cursor:"pointer",
-                  fontSize:10, fontWeight:700, fontFamily:"monospace",
+                  borderRadius:5,padding:"5px 10px",cursor:"pointer",fontSize:10,fontWeight:700,fontFamily:"monospace"
                 }}>L{d}</button>
               ))}
             </div>
           </div>
-
           <button onClick={handleFetch} disabled={status==="loading"} style={{
-            background:status==="loading"?"#1e293b":"#1d4ed8",
-            color:status==="loading"?"#475569":"#fff",
-            border:"none",borderRadius:6,padding:"8px 18px",
-            cursor:status==="loading"?"not-allowed":"pointer",fontSize:11,fontWeight:700
-          }}>
-            {status==="loading"?`⏳ ${progress.done}/${progress.total} pitchers...`:"🔄 FETCH SLATE"}
-          </button>
-
-          {status==="done" && (
-            <div style={{display:"flex", alignItems:"center", gap:8, flexWrap:"wrap"}}>
-              <div style={{color:"#4ade80",fontSize:10}}>
-                ✅ {rows.length} pitchers · ⭐ {eliteCount} ELITE · 🔒🔒 {hardLocks} hard locks · 🔒 {lockCount} marked
-                · Opp K% L{oppKDays}
-              </div>
-              <button
-                onClick={handlePullResults}
-                disabled={pulling}
-                style={{
-                  background: pulling ? "#1e293b" : "#7c3aed",
-                  color: pulling ? "#475569" : "#fff",
-                  border:"none", borderRadius:6, padding:"6px 14px",
-                  cursor: pulling ? "not-allowed" : "pointer",
-                  fontSize:10, fontWeight:700,
-                }}
-              >
-                {pulling ? "⏳ Pulling..." : "📊 PULL RESULTS"}
-              </button>
-              {pullStatus && <div style={{color:"#a78bfa", fontSize:10}}>{pullStatus}</div>}
+            background:status==="loading"?"#1e293b":"#1d4ed8",color:status==="loading"?"#475569":"#fff",
+            border:"none",borderRadius:6,padding:"8px 18px",cursor:status==="loading"?"not-allowed":"pointer",fontSize:11,fontWeight:700
+          }}>{status==="loading"?`⏳ ${progress.done}/${progress.total}...`:"🔄 FETCH SLATE"}</button>
+          {status==="done"&&(
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+              <span style={{color:"#4ade80",fontSize:10}}>✅ {rows.length} pitchers · ⭐ {eliteCount} ELITE · 🔒🔒 {hardLocks} locks · 🔒 {lockCount} marked · L{oppKDays}</span>
+              <button onClick={handlePullResults} disabled={pulling} style={{
+                background:pulling?"#1e293b":"#7c3aed",color:pulling?"#475569":"#fff",
+                border:"none",borderRadius:6,padding:"6px 14px",cursor:pulling?"not-allowed":"pointer",fontSize:10,fontWeight:700
+              }}>{pulling?"⏳ Pulling...":"📊 PULL RESULTS"}</button>
+              {pullStatus&&<span style={{color:"#a78bfa",fontSize:10}}>{pullStatus}</span>}
             </div>
           )}
-          {status==="error" && <div style={{color:"#f87171",fontSize:10}}>{error}</div>}
+          {status==="error"&&<div style={{color:"#f87171",fontSize:10}}>{error}</div>}
         </div>
       </div>
 
-      {status==="idle" && (
-        <div style={{background:"#0d1117",border:"1px solid #1e293b",borderRadius:10,padding:"12px 14px",marginBottom:12}}>
-          <div style={{color:"#475569",fontSize:9,letterSpacing:3,marginBottom:8}}>WHAT AUTO-FETCHES + HOW LOCK SCORE WORKS</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-            {[
-              ["⚾ Pitcher K% + BB% + ERA","Season stats from MLB API"],
-              ["📊 Game log outs + K + BB","Last 6 starts auto-calculated"],
-              ["🎯 Avg pitch count","Range, IP ceiling, tendency"],
-              ["👥 Opp K% L7 or L10","Toggle between windows"],
-              ["🔢 K Line Analysis","Enter PrizePicks line → hit rate + K log"],
-              ["🏆 Lock Score 0-7","K% · Opp K% · Hit rate · PC · Health · Weather · ERA"],
-              ["🌧️ Weather at game time","Temp · rain % · wind · indoor flag"],
-              ["✏️ Your edge layer","Notes, Spade data, context"],
-            ].map(([title,desc]) => (
-              <div key={title} style={{background:"#060c14",borderRadius:6,padding:"6px 10px"}}>
-                <div style={{color:"#f1f5f9",fontSize:10,fontWeight:700}}>{title}</div>
-                <div style={{color:"#475569",fontSize:9,marginTop:2}}>{desc}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{marginTop:10,background:"#060c14",borderRadius:6,padding:"8px 10px"}}>
-            <div style={{color:"#a78bfa",fontSize:9,fontWeight:700,marginBottom:4}}>🏆 LOCK SCORE GUIDE</div>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              {[["🔒🔒 LOCK","6-7 signals","#22c55e"],["🔒 LEAN","4-5 signals","#4ade80"],["⚠️ SITUATIONAL","2-3 signals","#eab308"],["❌ FADE","0-1 signals","#ef4444"]]
-                .map(([grade,desc,col])=>(
-                <div key={grade} style={{background:"#0f172a",borderRadius:5,padding:"4px 8px"}}>
-                  <span style={{color:col,fontWeight:700,fontSize:10}}>{grade}</span>
-                  <span style={{color:"#475569",fontSize:9,marginLeft:6}}>{desc}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {status==="loading" && rows.length===0 && (
+      {status==="loading"&&rows.length===0&&(
         <div style={{background:"#0d1117",border:"1px solid #1e293b",borderRadius:10,padding:"24px",textAlign:"center"}}>
           <div style={{color:"#3b82f6",fontSize:12}}>⏳ Pulling slate from MLB Stats API...</div>
           <div style={{color:"#475569",fontSize:9,marginTop:8}}>Season stats · game logs · K per start · pitch counts · opp K% · weather</div>
         </div>
       )}
 
-      {rows.length > 0 && (
+      {rows.length>0&&(
         <div style={{background:"#0d1117",border:"1px solid #1e293b",borderRadius:11,overflow:"hidden"}}>
           <table className="pitcher-table" style={{width:"100%",borderCollapse:"collapse"}}>
             <thead>
               <tr style={{background:"#111827",borderBottom:"2px solid #1e293b"}}>
-                {[["🔒","center"],["PITCHER","left"],["K GRADE","center"],["BB%","center"],["OUTS","center"],["K AVG","center"],["LOCK","center"],["RESULT","center"],["","center"]]
-                  .map(([h,a]) => (
-                    <th key={h} className={h==="K AVG"?"k-avg-col":h==="BB%"?"bb-col":h==="OUTS"?"outs-col":""} style={{padding:"8px 6px",textAlign:a,color:"#475569",fontSize:9,letterSpacing:2,fontWeight:700}}>{h}</th>
+                {[["🔒","center"],["PITCHER","left"],["K GRADE","center"],["BB%","center"],["OUTS","center"],["K AVG","center"],["LOCK","center"],["","center"]]
+                  .map(([h,a])=>(
+                    <th key={h} style={{padding:"8px 6px",textAlign:a,color:"#475569",fontSize:9,letterSpacing:2,fontWeight:700}}>{h}</th>
                   ))}
               </tr>
             </thead>
             <tbody>
-              {rows.map(r => (
-                <AutoRow
-                  key={r.playerId}
-                  r={{...r, result: results[r.playerId] || null}}
-                  onUpdateNote={updateNote}
-                  onToggleLock={toggleLock}
-                  kLine={kLines[r.playerId] || null}
-                  onKLineChange={(line) => updateKLine(r.playerId, line)}
-                  bbLine={bbLines[r.playerId] || null}
-                  onBBLineChange={(line) => updateBBLine(r.playerId, line)}
-                  haLine={haLines[r.playerId] || null}
-                  onHALineChange={(line) => updateHALine(r.playerId, line)}
-                  poLine={poLines[r.playerId] || null}
-                  onPOLineChange={(line) => updatePOLine(r.playerId, line)}
+              {rows.map(r=>r&&(
+                <AutoRow key={r.playerId} r={{...r,result:results[r.playerId]||null}}
+                  onUpdateNote={updateNote} onToggleLock={toggleLock}
+                  kLine={kLines[r.playerId]||null} onKLine={l=>updateKLine(r.playerId,l)}
+                  bbLine={bbLines[r.playerId]||null} onBBLine={l=>updateBBLine(r.playerId,l)}
+                  haLine={haLines[r.playerId]||null} onHALine={l=>updateHALine(r.playerId,l)}
+                  poLine={poLines[r.playerId]||null} onPOLine={l=>updatePOLine(r.playerId,l)}
                 />
               ))}
             </tbody>
