@@ -53,79 +53,131 @@ function LockScoreBadge({ score, grade }) {
   );
 }
 
-function KLinePanel({ r, kLine, onKLineChange }) {
-  const hitRate = calcKHitRate(r.kArr, kLine);
+function PropLineInput({ label, value, onChange, min=0, max=20, step=0.5, placeholder="e.g. 1.5" }) {
+  return (
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:5 }}>
+      <span style={{ color:"#94a3b8", fontSize:10 }}>{label} line</span>
+      <input
+        type="number" step={step} min={min} max={max}
+        value={value || ""}
+        onChange={e => onChange(parseFloat(e.target.value) || null)}
+        placeholder={placeholder}
+        style={{
+          background:"#0f172a", border:"1px solid #334155", color:"#f1f5f9",
+          borderRadius:5, padding:"3px 6px", width:60, fontSize:11,
+          fontFamily:"monospace", outline:"none", textAlign:"center",
+        }}
+      />
+    </div>
+  );
+}
+
+function PropHitRate({ arr, line, label, suffix="" }) {
+  if (!arr?.length || !line) return null;
+  const cleared = arr.filter(v => v > line).length;
+  const rate = Math.round((cleared / arr.length) * 100);
+  const col = rate >= 67 ? "#22c55e" : rate >= 40 ? "#eab308" : "#ef4444";
+  return (
+    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+      <span style={{ color:"#94a3b8", fontSize:9 }}>{label} hit rate vs {line}</span>
+      <span style={{ color:col, fontWeight:700, fontSize:10 }}>
+        {rate}% ({cleared}/{arr.length})
+      </span>
+    </div>
+  );
+}
+
+function PropLog({ arr, line, suffix="", color="#f1f5f9" }) {
+  if (!arr?.length) return null;
+  return (
+    <div style={{ display:"flex", gap:3, flexWrap:"wrap", marginBottom:6 }}>
+      {arr.map((v, i) => (
+        <span key={i} style={{
+          background: line && v > line ? "#061a0a" : "#0f172a",
+          border: `1px solid ${line && v > line ? "#16a34a" : "#1e293b"}`,
+          color: line && v > line ? "#4ade80" : "#64748b",
+          borderRadius:4, padding:"2px 5px", fontSize:10, fontWeight:700,
+        }}>{v}{suffix}</span>
+      ))}
+    </div>
+  );
+}
+
+function KLinePanel({ r, kLine, onKLineChange, bbLine, onBBLineChange, haLine, onHALineChange, poLine, onPOLineChange }) {
   const lockInfo = calcLockScore(r, kLine);
-  const hitCol = hitRate >= 67 ? "#22c55e" : hitRate >= 40 ? "#eab308" : "#ef4444";
 
   return (
     <div style={{ background:"#0d1117", border:"1px solid #1e293b", borderRadius:10, padding:"10px 12px" }}>
-      <div style={{ color:"#475569", fontSize:9, letterSpacing:3, marginBottom:8 }}>K LINE ANALYSIS</div>
+      <div style={{ color:"#475569", fontSize:9, letterSpacing:3, marginBottom:8 }}>PRIZEPICKS LINE ANALYSIS</div>
 
-      {/* Expected K */}
-      {r.expectedK && (
-        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
-          <span style={{ color:"#94a3b8", fontSize:10 }}>Expected Ks</span>
-          <span style={{ color:"#a78bfa", fontWeight:700, fontSize:12 }}>~{r.expectedK}</span>
-        </div>
-      )}
-
-      {/* Recent K avg */}
-      {r.avgK !== null && (
-        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
-          <span style={{ color:"#94a3b8", fontSize:10 }}>Avg Ks/start</span>
-          <span style={{ color:"#f1f5f9", fontWeight:700, fontSize:12 }}>{r.avgK} <span style={{ color:"#475569", fontSize:9 }}>({r.minK}–{r.maxK})</span></span>
-        </div>
-      )}
-
-      {/* K line input */}
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-        <span style={{ color:"#94a3b8", fontSize:10 }}>PrizePicks line</span>
-        <input
-          type="number"
-          step="0.5"
-          min="0"
-          max="15"
-          value={kLine || ""}
-          onChange={e => onKLineChange(parseFloat(e.target.value) || null)}
-          placeholder="e.g. 4.5"
-          style={{
-            background:"#0f172a", border:"1px solid #334155", color:"#f1f5f9",
-            borderRadius:5, padding:"3px 6px", width:60, fontSize:11,
-            fontFamily:"monospace", outline:"none", textAlign:"center",
-          }}
-        />
+      {/* ── K LINE ── */}
+      <div style={{ background:"#060c14", borderRadius:6, padding:"6px 8px", marginBottom:8 }}>
+        <div style={{ color:"#3b82f6", fontSize:8, letterSpacing:2, marginBottom:4 }}>⚾ STRIKEOUTS</div>
+        {r.expectedK && (
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+            <span style={{ color:"#94a3b8", fontSize:9 }}>Expected</span>
+            <span style={{ color:"#a78bfa", fontWeight:700, fontSize:11 }}>~{r.expectedK}K</span>
+          </div>
+        )}
+        {r.avgK !== null && (
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+            <span style={{ color:"#94a3b8", fontSize:9 }}>Avg/start</span>
+            <span style={{ color:"#f1f5f9", fontWeight:700, fontSize:11 }}>{r.avgK}K <span style={{ color:"#475569", fontSize:8 }}>({r.minK}–{r.maxK})</span></span>
+          </div>
+        )}
+        <PropLineInput label="K" value={kLine} onChange={onKLineChange} max={15} placeholder="e.g. 4.5"/>
+        <PropHitRate arr={r.kArr} line={kLine} label="K"/>
+        <PropLog arr={r.kArr} line={kLine} suffix="K"/>
       </div>
 
-      {/* Hit rate */}
-      {hitRate !== null && (
-        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
-          <span style={{ color:"#94a3b8", fontSize:10 }}>Hit rate vs {kLine}</span>
-          <span style={{ color:hitCol, fontWeight:700, fontSize:12 }}>
-            {hitRate}% ({r.kArr?.filter(k=>k>kLine).length}/{r.kArr?.length} starts)
-          </span>
+      {/* ── BB LINE ── */}
+      <div style={{ background:"#060c14", borderRadius:6, padding:"6px 8px", marginBottom:8 }}>
+        <div style={{ color:"#eab308", fontSize:8, letterSpacing:2, marginBottom:4 }}>🎯 WALKS (BB)</div>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+          <span style={{ color:"#94a3b8", fontSize:9 }}>Avg BB/start</span>
+          <span style={{ color:"#f1f5f9", fontWeight:700, fontSize:11 }}>{r.bbAvg?.toFixed(1) ?? "—"} BB</span>
         </div>
-      )}
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+          <span style={{ color:"#94a3b8", fontSize:9 }}>Season BB%</span>
+          <span style={{ color: r.bbPct >= 9 ? "#22c55e" : r.bbPct >= 6 ? "#eab308" : "#ef4444", fontWeight:700, fontSize:11 }}>{r.bbPct?.toFixed(1)}%</span>
+        </div>
+        <PropLineInput label="BB" value={bbLine} onChange={onBBLineChange} max={8} placeholder="e.g. 1.5"/>
+        <PropHitRate arr={r.bbArr} line={bbLine} label="BB"/>
+        <PropLog arr={r.bbArr} line={bbLine} suffix="BB"/>
+      </div>
 
-      {/* Recent K log */}
-      {r.kArr?.length > 0 && (
-        <div style={{ marginTop:6 }}>
-          <div style={{ color:"#475569", fontSize:8, letterSpacing:2, marginBottom:4 }}>RECENT K LOG</div>
-          <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-            {r.kArr.map((k, i) => (
-              <span key={i} style={{
-                background: kLine && k > kLine ? "#061a0a" : "#0f172a",
-                border: `1px solid ${kLine && k > kLine ? "#16a34a" : "#1e293b"}`,
-                color: kLine && k > kLine ? "#4ade80" : "#64748b",
-                borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:700,
-              }}>{k}K</span>
-            ))}
+      {/* ── HITS ALLOWED LINE ── */}
+      <div style={{ background:"#060c14", borderRadius:6, padding:"6px 8px", marginBottom:8 }}>
+        <div style={{ color:"#ef4444", fontSize:8, letterSpacing:2, marginBottom:4 }}>🎯 HITS ALLOWED (HA)</div>
+        {r.avgH !== null && (
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+            <span style={{ color:"#94a3b8", fontSize:9 }}>Avg HA/start</span>
+            <span style={{ color: r.avgH >= 8 ? "#ef4444" : r.avgH >= 5 ? "#eab308" : "#22c55e", fontWeight:700, fontSize:11 }}>{r.avgH}H</span>
           </div>
+        )}
+        <PropLineInput label="HA" value={haLine} onChange={onHALineChange} max={15} placeholder="e.g. 6.5"/>
+        <PropHitRate arr={r.hArr} line={haLine} label="HA"/>
+        <PropLog arr={r.hArr} line={haLine} suffix="H"/>
+      </div>
+
+      {/* ── PITCHER OUTS LINE ── */}
+      <div style={{ background:"#060c14", borderRadius:6, padding:"6px 8px", marginBottom:8 }}>
+        <div style={{ color:"#22c55e", fontSize:8, letterSpacing:2, marginBottom:4 }}>📊 PITCHER OUTS (PO)</div>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+          <span style={{ color:"#94a3b8", fontSize:9 }}>Avg outs/start</span>
+          <span style={{ color: r.outsAvg >= 18 ? "#22c55e" : r.outsAvg >= 15 ? "#eab308" : "#ef4444", fontWeight:700, fontSize:11 }}>{r.outsAvg?.toFixed(1) ?? "—"}</span>
         </div>
-      )}
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+          <span style={{ color:"#94a3b8", fontSize:9 }}>Hit rate vs 17.5</span>
+          <span style={{ color: r.outsHitRate >= 67 ? "#22c55e" : r.outsHitRate >= 33 ? "#eab308" : "#ef4444", fontWeight:700, fontSize:11 }}>{r.outsHitRate}%</span>
+        </div>
+        <PropLineInput label="PO" value={poLine} onChange={onPOLineChange} max={27} placeholder="e.g. 17.5"/>
+        <PropHitRate arr={r.outsArr} line={poLine} label="PO"/>
+        <PropLog arr={r.outsArr} line={poLine} suffix=" outs"/>
+      </div>
 
       {/* Lock score breakdown */}
-      <div style={{ marginTop:8, background:"#060c14", border:"1px solid #1e293b", borderRadius:6, padding:"6px 8px" }}>
+      <div style={{ background:"#060c14", border:"1px solid #1e293b", borderRadius:6, padding:"6px 8px" }}>
         <div style={{ color:"#475569", fontSize:8, letterSpacing:2, marginBottom:4 }}>LOCK SCORE BREAKDOWN</div>
         {lockInfo.signals.map((s, i) => (
           <div key={i} style={{ color: s.startsWith("✅") ? "#4ade80" : s.startsWith("🔒") ? "#4ade80" : s.startsWith("⬜") ? "#475569" : "#f87171", fontSize:9, marginBottom:2 }}>
@@ -291,7 +343,7 @@ function OppKSplitsPanel({ splits, oppK, oppKDays }) {
   );
 }
 
-function AutoRow({ r, onUpdateNote, onToggleLock, kLine, onKLineChange }) {
+function AutoRow({ r, onUpdateNote, onToggleLock, kLine, onKLineChange, bbLine, onBBLineChange, haLine, onHALineChange, poLine, onPOLineChange }) {
   const [expanded, setExpanded] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
   const [noteVal, setNoteVal] = useState(r.note || "");
@@ -433,7 +485,13 @@ function AutoRow({ r, onUpdateNote, onToggleLock, kLine, onKLineChange }) {
               </div>
 
               {/* K Line Analysis */}
-              <KLinePanel r={r} kLine={kLine} onKLineChange={onKLineChange}/>
+              <KLinePanel
+                r={r}
+                kLine={kLine} onKLineChange={onKLineChange}
+                bbLine={bbLine} onBBLineChange={onBBLineChange}
+                haLine={haLine} onHALineChange={onHALineChange}
+                poLine={poLine} onPOLineChange={onPOLineChange}
+              />
 
               {/* Walks */}
               <div style={{background:"#0d1117", border:"1px solid #1e293b", borderRadius:10, padding:"10px 12px"}}>
@@ -593,7 +651,10 @@ export default function LiveSlate() {
   const [date, setDate]         = useState(() => new Date().toISOString().split("T")[0]);
   const [oppKDays, setOppKDays] = useState(7);
   const [rows, setRows]         = useState([]);
-  const [kLines, setKLines]     = useState({});  // playerId → line value
+  const [kLines, setKLines]     = useState({});  // playerId → K line
+  const [bbLines, setBBLines]   = useState({});  // playerId → BB line
+  const [haLines, setHALines]   = useState({});  // playerId → HA line
+  const [poLines, setPOLines]   = useState({});  // playerId → PO line
   const [results, setResults]   = useState({});  // playerId → result data
   const [pulling, setPulling]   = useState(false);
   const [pullStatus, setPullStatus] = useState("");
@@ -682,21 +743,21 @@ export default function LiveSlate() {
 
   const updateKLine = useCallback((playerId, line) => {
     setKLines(prev => ({ ...prev, [playerId]: line }));
-    // Save K line immediately and independently
     const row = rows.find(r => r.playerId === playerId);
-    const note = row?.note || "";
-    const isLock = note.includes("🔒");
-    saveNotePermanent(date, playerId, note, line, isLock);
+    saveNotePermanent(date, playerId, row?.note || "", line, row?.note?.includes("🔒"));
   }, [date, rows]);
 
-  // Also auto-save when kLines change (debounced)
-  const saveKLineDebounced = useCallback((playerId, line) => {
-    const timer = setTimeout(() => {
-      const row = rows.find(r => r.playerId === playerId);
-      saveNotePermanent(date, playerId, row?.note || "", line, row?.note?.includes("🔒"));
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [date, rows]);
+  const updateBBLine = useCallback((playerId, line) => {
+    setBBLines(prev => ({ ...prev, [playerId]: line }));
+  }, []);
+
+  const updateHALine = useCallback((playerId, line) => {
+    setHALines(prev => ({ ...prev, [playerId]: line }));
+  }, []);
+
+  const updatePOLine = useCallback((playerId, line) => {
+    setPOLines(prev => ({ ...prev, [playerId]: line }));
+  }, []);
 
   // Pull results for all fetched pitchers
   const handlePullResults = useCallback(async () => {
@@ -712,7 +773,10 @@ export default function LiveSlate() {
       total++;
 
       const kLine = kLines[r.playerId];
-      const grades = gradeResult(result, kLine, r.bbLine, r.outsLine);
+      const bbLineVal = bbLines[r.playerId] || r.bbLine;
+      const haLineVal = haLines[r.playerId];
+      const poLineVal = poLines[r.playerId] || r.outsLine;
+      const grades = gradeResult(result, kLine, bbLineVal, poLineVal, haLineVal);
 
       const resultObj = { ...result, grades, kLine };
       setResults(prev => ({ ...prev, [r.playerId]: resultObj }));
@@ -888,6 +952,12 @@ export default function LiveSlate() {
                   onToggleLock={toggleLock}
                   kLine={kLines[r.playerId] || null}
                   onKLineChange={(line) => updateKLine(r.playerId, line)}
+                  bbLine={bbLines[r.playerId] || null}
+                  onBBLineChange={(line) => updateBBLine(r.playerId, line)}
+                  haLine={haLines[r.playerId] || null}
+                  onHALineChange={(line) => updateHALine(r.playerId, line)}
+                  poLine={poLines[r.playerId] || null}
+                  onPOLineChange={(line) => updatePOLine(r.playerId, line)}
                 />
               ))}
             </tbody>
