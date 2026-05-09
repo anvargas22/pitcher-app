@@ -2,6 +2,7 @@ import { gradeK, gradeOpp, gradeBB, gradeOuts, combinedKGrade, GRADE_COLORS } fr
 import { Pill, Dot, PCBadge } from "./Pill";
 
 export default function Row({ r, idx, expanded, onToggle }) {
+  if (!r || r.pitcherK === undefined) return null;
   const pg     = gradeK(r.pitcherK);
   const og     = gradeOpp(r.oppK);
   const kGrade = combinedKGrade(pg, og);
