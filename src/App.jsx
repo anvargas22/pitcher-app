@@ -126,7 +126,7 @@ export default function App() {
                 </tr>
               </thead>
               <tbody>
-                {displayed.map((r, i) => (
+                {displayed.filter(r => r && r.pitcherK !== undefined).map((r, i) => (
                   <Row
                     key={`${r.date}-${r.pitcher}-${i}`}
                     r={r} idx={i}
