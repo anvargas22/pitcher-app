@@ -7,7 +7,7 @@ import Banner from "./components/Banner";
 import LiveSlate from "./components/LiveSlate";
 
 const VIEW_MAP = {
-  "508":"5/8","507":"5/7","506":"5/6","505":"5/5","504":"5/4","503":"5/3","502":"5/2","501":"5/1",
+  "509":"5/9","508":"5/8","507":"5/7","506":"5/6","505":"5/5","504":"5/4","503":"5/3","502":"5/2","501":"5/1",
   "430":"4/30","429":"4/29","428":"4/28","427":"4/27","426":"4/26","425":"4/25","all":"all"
 };
 
@@ -15,7 +15,7 @@ export default function App() {
   const [mode, setMode]         = useState("log");   // "log" | "live"
   const [extra, setExtra]       = useState([]);
   const [expanded, setExpanded] = useState(null);
-  const [view, setView]         = useState("508");
+  const [view, setView]         = useState("509");
   const [filter, setFilter]     = useState("all");
 
   const allRows = useMemo(() => [...ALL_DATA, ...extra], [extra]);
@@ -84,7 +84,7 @@ export default function App() {
           <div style={{ marginBottom:14 }}>
             <h1 style={{ color:"#f1f5f9", fontSize:18, fontWeight:900, margin:0 }}>K% + BB% + OUTS</h1>
             <div style={{ color:"#475569", fontSize:10, marginTop:2 }}>
-              {allRows.length} PITCHERS · 4/25–5/8 · GAME LOG VERIFIED · PRIZEPICKS
+              {allRows.length} PITCHERS · 4/25–5/9 · GAME LOG VERIFIED · PRIZEPICKS
             </div>
           </div>
 
@@ -101,7 +101,7 @@ export default function App() {
 
           {/* Date nav */}
           <div style={{ display:"flex", gap:5, marginBottom:8, flexWrap:"wrap" }}>
-            {btn("508","🔥 5/8")}{btn("507","⭐ 5/7")}{btn("506","5/6")}{btn("505","5/5")}{btn("504","🔵 5/4")}
+            {btn("509","🔥 5/9")}{btn("508","5/8")}{btn("507","⭐ 5/7")}{btn("506","5/6")}{btn("505","5/5")}{btn("504","🔵 5/4")}
             {btn("503","5/3")}{btn("502","5/2")}{btn("501","5/1")}
             {btn("430","4/30")}{btn("429","4/29")}{btn("428","4/28")}
             {btn("427","4/27")}{btn("426","4/26")}{btn("425","4/25")}
@@ -140,7 +140,7 @@ export default function App() {
           </div>
 
           <div style={{ color:"#1e293b", fontSize:9, textAlign:"center" }}>
-            GAME LOG VERIFIED 4/25–5/8 · BLACK HOODIE CO. PICKS · PRIZEPICKS
+            GAME LOG VERIFIED 4/25–5/9 · BLACK HOODIE CO. PICKS · PRIZEPICKS
           </div>
         </div>
       )}
