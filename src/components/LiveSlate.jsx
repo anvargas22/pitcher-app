@@ -381,7 +381,11 @@ export default function LiveSlate() {
         <div style={{color:"#3b82f6", fontSize:9, letterSpacing:4, marginBottom:3}}>LIVE AUTO-FETCH · MLB STATS API</div>
         <h1 style={{color:"#f1f5f9", fontSize:18, fontWeight:900, margin:0}}>🔄 SEMI-AUTO RESEARCH</h1>
         <div style={{color:"#475569", fontSize:10, marginTop:2}}>
-          Auto: K% · BB% · Outs · Opp K% L7 · Pitch Count · Injuries · Weather · Lock Suggestions
+          Auto: K% · BB% · Outs · Opp K% L7 · Pitch Count · Weather · Lock Suggestions
+        </div>
+        <div style={{color:"#1d4ed8", fontSize:9, marginTop:3, background:"#0f172a", borderRadius:4, padding:"4px 8px", display:"inline-block"}}>
+          ℹ️ Injured pitchers (IL) won't appear — MLB removes them from probable starters automatically.
+          Day-to-day pitchers who still show as probable will get a 🚨 flag on their row.
         </div>
       </div>
 
