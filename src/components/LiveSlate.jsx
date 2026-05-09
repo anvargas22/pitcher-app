@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { fetchProbablePitchers, buildPitcherRow, calcLockScore, calcKHitRate } from "../services/mlbApi";
+import { fetchProbablePitchers, buildPitcherRow, calcLockScore, calcKHitRate, fetchPitcherResult, saveResult, loadResults, saveNotePermanent, loadNotes, gradeResult } from "../services/mlbApi";
 import { gradeK, gradeOpp, combinedKGrade, gradeScore, GRADE_COLORS, gradeBB, gradeOuts } from "../utils/grades";
 import { Pill, Dot, PCBadge } from "./Pill";
 
@@ -349,6 +349,17 @@ function AutoRow({ r, onUpdateNote, onToggleLock, kLine, onKLineChange }) {
           <LockScoreBadge score={lockInfo.score} grade={lockInfo.grade}/>
         </td>
 
+        {/* Result badge on row */}
+        <td style={{padding:"9px 6px", textAlign:"center"}} onClick={() => setExpanded(!expanded)}>
+          {r.result ? (
+            <div style={{
+              fontSize:9, fontWeight:700,
+              color: r.result.grades?.some(g=>g.includes("✅")) ? "#4ade80" : "#f87171"
+            }}>
+              {r.result.k}K {r.result.grades?.some(g=>g.includes("✅")) ? "✅" : "❌"}
+            </div>
+          ) : <span style={{color:"#1e293b", fontSize:9}}>—</span>}
+        </td>
         <td style={{padding:"9px 8px", textAlign:"center", color:"#3b82f6", fontSize:14}} onClick={() => setExpanded(!expanded)}>
           {expanded?"▲":"▼"}
         </td>
@@ -356,7 +367,7 @@ function AutoRow({ r, onUpdateNote, onToggleLock, kLine, onKLineChange }) {
 
       {expanded && (
         <tr style={{borderBottom:"1px solid #1f2937", background:"#0a0f1a"}}>
-          <td colSpan={8} style={{padding:"10px 14px 14px"}}>
+          <td colSpan={9} style={{padding:"10px 14px 14px"}}>
 
             {(hasInjury || hasWeatherAlert) && (
               <div style={{marginBottom:10, display:"flex", gap:6, flexWrap:"wrap"}}>
@@ -497,6 +508,27 @@ function AutoRow({ r, onUpdateNote, onToggleLock, kLine, onKLineChange }) {
               </div>
             )}
 
+            {/* Result display if available */}
+            {r.result && (
+              <div style={{
+                background: r.result.grades?.some(g=>g.includes("✅")) ? "#061a0a" : "#1a0505",
+                border: `1px solid ${r.result.grades?.some(g=>g.includes("✅")) ? "#16a34a" : "#dc2626"}`,
+                borderRadius:8, padding:"8px 12px", marginBottom:8,
+              }}>
+                <div style={{color:"#475569", fontSize:9, letterSpacing:3, marginBottom:4}}>FINAL RESULT</div>
+                <div style={{color:"#f1f5f9", fontWeight:700, fontSize:11}}>
+                  {r.result.ip}IP · {r.result.hits}H · {r.result.er}ER · {r.result.bb}BB · {r.result.k}K
+                  {r.result.pc ? ` · ${r.result.pc}pc` : ""}
+                </div>
+                {r.result.grades?.map((g,i) => (
+                  <div key={i} style={{
+                    color: g.includes("✅") ? "#4ade80" : "#f87171",
+                    fontSize:10, fontWeight:700, marginTop:4,
+                  }}>{g}</div>
+                ))}
+              </div>
+            )}
+
             {/* Note editor */}
             <div style={{background:"#060c14", border:"1px solid #1e293b", borderRadius:8, padding:"8px 12px"}}>
               <div style={{color:"#475569", fontSize:9, letterSpacing:3, marginBottom:6}}>YOUR NOTES / EDGE LAYER</div>
@@ -538,6 +570,9 @@ export default function LiveSlate() {
   const [oppKDays, setOppKDays] = useState(7);
   const [rows, setRows]         = useState([]);
   const [kLines, setKLines]     = useState({});  // playerId → line value
+  const [results, setResults]   = useState({});  // playerId → result data
+  const [pulling, setPulling]   = useState(false);
+  const [pullStatus, setPullStatus] = useState("");
   const [status, setStatus]     = useState("idle");
   const [error, setError]       = useState("");
   const [progress, setProgress] = useState({ done:0, total:0 });
@@ -571,6 +606,32 @@ export default function LiveSlate() {
         setProgress({ done:Math.min(i+CHUNK, probables.length), total:probables.length });
       }
       setStatus("done");
+
+      // Load any saved notes and results for this date
+      const [savedNotes, savedResults] = await Promise.all([
+        loadNotes(date),
+        loadResults(date),
+      ]);
+
+      // Apply saved notes back to rows
+      if (savedNotes.length) {
+        setRows(prev => prev.map(r => {
+          const saved = savedNotes.find(n => n.playerId === r.playerId);
+          if (saved) return { ...r, note: saved.note || r.note };
+          return r;
+        }));
+        const savedKLines = {};
+        savedNotes.forEach(n => { if (n.kLine) savedKLines[n.playerId] = n.kLine; });
+        if (Object.keys(savedKLines).length) setKLines(prev => ({...prev, ...savedKLines}));
+      }
+
+      // Apply saved results
+      if (savedResults.length) {
+        const resultsMap = {};
+        savedResults.forEach(r => { resultsMap[r.playerId] = r.result; });
+        setResults(resultsMap);
+      }
+
     } catch(err) {
       setError(`Fetch failed: ${err.message}`);
       setStatus("error");
@@ -579,7 +640,10 @@ export default function LiveSlate() {
 
   const updateNote = useCallback((playerId, note) => {
     setRows(prev => prev.map(r => r.playerId===playerId ? {...r, note} : r));
-  }, []);
+    // Save permanently
+    const kLine = kLines[playerId];
+    saveNotePermanent(date, playerId, note, kLine, note?.includes("🔒"));
+  }, [date, kLines]);
 
   const toggleLock = useCallback((playerId) => {
     setRows(prev => prev.map(r => {
@@ -594,7 +658,57 @@ export default function LiveSlate() {
 
   const updateKLine = useCallback((playerId, line) => {
     setKLines(prev => ({ ...prev, [playerId]: line }));
-  }, []);
+    // Save permanently
+    const row = rows.find(r => r.playerId === playerId);
+    if (row) saveNotePermanent(date, playerId, row.note || "", line, row.note?.includes("🔒"));
+  }, [date, rows]);
+
+  // Pull results for all fetched pitchers
+  const handlePullResults = useCallback(async () => {
+    if (!rows.length) return;
+    setPulling(true);
+    setPullStatus("Pulling results...");
+
+    let cashed = 0, missed = 0, total = 0;
+
+    for (const r of rows) {
+      const result = await fetchPitcherResult(r.playerId, date);
+      if (!result) continue;
+      total++;
+
+      const kLine = kLines[r.playerId];
+      const grades = gradeResult(result, kLine, r.bbLine, r.outsLine);
+
+      const resultObj = { ...result, grades, kLine };
+      setResults(prev => ({ ...prev, [r.playerId]: resultObj }));
+
+      // Count cashed/missed
+      grades.forEach(g => {
+        if (g.includes("✅")) cashed++;
+        if (g.includes("❌")) missed++;
+      });
+
+      // Build result note
+      const resultNote = `RESULT: ${result.ip}IP ${result.hits}H ${result.er}ER ${result.bb}BB ${result.k}K${result.pc ? ` ${result.pc}pc` : ""} — ${grades.join(" · ")}`;
+
+      // Save to database
+      await saveResult(date, r.playerId, resultObj);
+
+      // Update note in row
+      setRows(prev => prev.map(row => {
+        if (row.playerId !== r.playerId) return row;
+        const existingNote = row.note || "";
+        const newNote = existingNote.includes("RESULT:")
+          ? existingNote.replace(/RESULT:.*$/, resultNote)
+          : (existingNote ? existingNote + " | " + resultNote : resultNote);
+        saveNotePermanent(date, r.playerId, newNote, kLine, newNote.includes("🔒"));
+        return { ...row, note: newNote };
+      }));
+    }
+
+    setPullStatus(`✅ ${total} results pulled · ${cashed} cashed · ${missed} missed`);
+    setPulling(false);
+  }, [rows, date, kLines]);
 
   const sc = STATUS_COLORS[status];
   const eliteCount = rows.filter(r => combinedKGrade(gradeK(r.pitcherK),gradeOpp(r.oppK))==="⭐⭐ ELITE").length;
@@ -652,9 +766,25 @@ export default function LiveSlate() {
           </button>
 
           {status==="done" && (
-            <div style={{color:"#4ade80",fontSize:10}}>
-              ✅ {rows.length} pitchers · ⭐ {eliteCount} ELITE · 🔒🔒 {hardLocks} hard locks · 🔒 {lockCount} marked
-              · Opp K% L{oppKDays}
+            <div style={{display:"flex", alignItems:"center", gap:8, flexWrap:"wrap"}}>
+              <div style={{color:"#4ade80",fontSize:10}}>
+                ✅ {rows.length} pitchers · ⭐ {eliteCount} ELITE · 🔒🔒 {hardLocks} hard locks · 🔒 {lockCount} marked
+                · Opp K% L{oppKDays}
+              </div>
+              <button
+                onClick={handlePullResults}
+                disabled={pulling}
+                style={{
+                  background: pulling ? "#1e293b" : "#7c3aed",
+                  color: pulling ? "#475569" : "#fff",
+                  border:"none", borderRadius:6, padding:"6px 14px",
+                  cursor: pulling ? "not-allowed" : "pointer",
+                  fontSize:10, fontWeight:700,
+                }}
+              >
+                {pulling ? "⏳ Pulling..." : "📊 PULL RESULTS"}
+              </button>
+              {pullStatus && <div style={{color:"#a78bfa", fontSize:10}}>{pullStatus}</div>}
             </div>
           )}
           {status==="error" && <div style={{color:"#f87171",fontSize:10}}>{error}</div>}
@@ -708,7 +838,7 @@ export default function LiveSlate() {
           <table style={{width:"100%",borderCollapse:"collapse"}}>
             <thead>
               <tr style={{background:"#111827",borderBottom:"2px solid #1e293b"}}>
-                {[["🔒","center"],["PITCHER","left"],["K GRADE","center"],["BB%","center"],["OUTS","center"],["K AVG","center"],["LOCK","center"],["","center"]]
+                {[["🔒","center"],["PITCHER","left"],["K GRADE","center"],["BB%","center"],["OUTS","center"],["K AVG","center"],["LOCK","center"],["RESULT","center"],["","center"]]
                   .map(([h,a]) => (
                     <th key={h} style={{padding:"8px 6px",textAlign:a,color:"#475569",fontSize:9,letterSpacing:2,fontWeight:700}}>{h}</th>
                   ))}
@@ -718,7 +848,7 @@ export default function LiveSlate() {
               {rows.map(r => (
                 <AutoRow
                   key={r.playerId}
-                  r={r}
+                  r={{...r, result: results[r.playerId] || null}}
                   onUpdateNote={updateNote}
                   onToggleLock={toggleLock}
                   kLine={kLines[r.playerId] || null}
