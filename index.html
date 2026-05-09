@@ -8,7 +8,27 @@
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { background: #080d14; }
     </style>
-  </head>
+    <style>
+    @media (max-width: 768px) {
+      .stats-grid-5 { grid-template-columns: 1fr 1fr !important; }
+      .stats-grid-2 { grid-template-columns: 1fr !important; }
+      .controls-row { flex-direction: column !important; align-items: flex-start !important; }
+      .pitcher-table { font-size: 10px !important; }
+      .pitcher-table td { padding: 6px 4px !important; }
+      .k-avg-col { display: none !important; }
+      .date-nav { gap: 3px !important; }
+      .date-nav button { padding: 4px 6px !important; font-size: 9px !important; }
+      .filter-nav button { padding: 4px 6px !important; font-size: 9px !important; }
+      .game-log-table th, .game-log-table td { padding: 6px 4px !important; font-size: 10px !important; }
+      .expanded-grid { grid-template-columns: 1fr 1fr !important; }
+      h1 { font-size: 15px !important; }
+    }
+    @media (max-width: 480px) {
+      .stats-grid-5 { grid-template-columns: 1fr !important; }
+      .date-nav button { padding: 3px 5px !important; font-size: 8px !important; }
+    }
+  </style>
+</head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
