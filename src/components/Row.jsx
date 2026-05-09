@@ -2,7 +2,10 @@ import { gradeK, gradeOpp, gradeBB, gradeOuts, combinedKGrade, GRADE_COLORS } fr
 import { Pill, Dot, PCBadge } from "./Pill";
 
 export default function Row({ r, idx, expanded, onToggle }) {
-  if (!r || r.pitcherK === undefined) return null;
+  if (!r) return null;
+  if (r.pitcherK === undefined || r.pitcherK === null) return null;
+  if (r.oppK === undefined || r.oppK === null) return null;
+
   const pg     = gradeK(r.pitcherK);
   const og     = gradeOpp(r.oppK);
   const kGrade = combinedKGrade(pg, og);
@@ -60,9 +63,7 @@ export default function Row({ r, idx, expanded, onToggle }) {
       {expanded && (
         <tr style={{ borderBottom:"1px solid #1f2937", background:"#0a0f1a" }}>
           <td colSpan={5} style={{ padding:"10px 14px 14px" }}>
-            <div className="expanded-grid" style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
-
-              {/* K Matchup */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
               <div style={{ background:"#0d1117", border:"1px solid #1e293b", borderRadius:10, padding:"10px 12px" }}>
                 <div style={{ color:"#475569", fontSize:9, letterSpacing:3, marginBottom:8 }}>K MATCHUP</div>
                 <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
@@ -70,16 +71,14 @@ export default function Row({ r, idx, expanded, onToggle }) {
                   <Pill value={r.pitcherK>0?r.pitcherK.toFixed(1):"N/A"} grade={pg} suffix={r.pitcherK>0?"%":""}/>
                 </div>
                 <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
-                  <span style={{ color:"#94a3b8", fontSize:10 }}>Opp K% L7</span>
-                  <Pill value={r.oppK!=null?r.oppK.toFixed(1):"—"} grade={og} suffix={r.oppK!=null?"%":""}/>
+                  <span style={{ color:"#94a3b8", fontSize:10 }}>Opp K% L10</span>
+                  <Pill value={r.oppK.toFixed(1)} grade={og} suffix="%"/>
                 </div>
                 <div style={{ display:"flex", justifyContent:"space-between" }}>
                   <span style={{ color:"#94a3b8", fontSize:10 }}>Grade</span>
                   <span style={{ color: GRADE_COLORS[kGrade], fontWeight:700, fontSize:10 }}>{kGrade}</span>
                 </div>
               </div>
-
-              {/* Walks */}
               <div style={{ background:"#0d1117", border:"1px solid #1e293b", borderRadius:10, padding:"10px 12px" }}>
                 <div style={{ color:"#475569", fontSize:9, letterSpacing:3, marginBottom:8 }}>WALKS</div>
                 {has430 ? (
@@ -90,7 +89,7 @@ export default function Row({ r, idx, expanded, onToggle }) {
                     </div>
                     <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
                       <span style={{ color:"#94a3b8", fontSize:10 }}>Avg BBs</span>
-                      <span style={{ color:"#f1f5f9", fontWeight:700, fontSize:12 }}>{r.bbAvg.toFixed(1)}</span>
+                      <span style={{ color:"#f1f5f9", fontWeight:700, fontSize:12 }}>{r.bbAvg?.toFixed(1)??'—'}</span>
                     </div>
                     <div style={{ display:"flex", justifyContent:"space-between" }}>
                       <span style={{ color:"#94a3b8", fontSize:10 }}>Play</span>
@@ -101,8 +100,6 @@ export default function Row({ r, idx, expanded, onToggle }) {
                   </>
                 ) : <span style={{ color:"#475569", fontSize:10 }}>Added from 4/30 onward</span>}
               </div>
-
-              {/* Outs */}
               <div style={{ background:"#0d1117", border:"1px solid #1e293b", borderRadius:10, padding:"10px 12px" }}>
                 <div style={{ color:"#475569", fontSize:9, letterSpacing:3, marginBottom:8 }}>OUTS / IP</div>
                 {has430 ? (
@@ -117,10 +114,6 @@ export default function Row({ r, idx, expanded, onToggle }) {
                         {r.outsHitRate}%
                       </span>
                     </div>
-                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
-                      <span style={{ color:"#94a3b8", fontSize:10 }}>PC tend.</span>
-                      <PCBadge tendency={r.pcTendency}/>
-                    </div>
                     <div style={{ display:"flex", justifyContent:"space-between" }}>
                       <span style={{ color:"#94a3b8", fontSize:10 }}>Play</span>
                       <span style={{ color: og2==="green"?"#4ade80": og2==="yellow"?"#facc15":"#f87171", fontWeight:700, fontSize:10 }}>
@@ -131,12 +124,8 @@ export default function Row({ r, idx, expanded, onToggle }) {
                 ) : <span style={{ color:"#475569", fontSize:10 }}>Added from 4/30 onward</span>}
               </div>
             </div>
-
             {r.note && (
-              <div style={{
-                marginTop:8, background:"#060c14", border:"1px solid #1e293b",
-                borderRadius:8, padding:"6px 12px", color:"#64748b", fontSize:10, fontStyle:"italic",
-              }}>
+              <div style={{ marginTop:8, background:"#060c14", border:"1px solid #1e293b", borderRadius:8, padding:"6px 12px", color:"#64748b", fontSize:10, fontStyle:"italic" }}>
                 {r.note}
               </div>
             )}
