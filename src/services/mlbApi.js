@@ -129,6 +129,7 @@ export async function fetchPitcherGameLog(playerId, numStarts = 6) {
     const outsArr = splits.map(s => ipToOuts(s.stat?.inningsPitched || "0.0"));
     const bbArr   = splits.map(s => parseInt(s.stat?.baseOnBalls || 0));
     const kArr    = splits.map(s => parseInt(s.stat?.strikeOuts || 0));
+    const hArr    = splits.map(s => parseInt(s.stat?.hits || 0));
 
     // Capture opponent team for each start
     const oppPerStart = splits.map(s => {
@@ -176,9 +177,11 @@ export async function fetchPitcherGameLog(playerId, numStarts = 6) {
       })
     );
 
+    const avgH = hArr.length ? Math.round((hArr.reduce((a,b)=>a+b,0)/hArr.length)*10)/10 : null;
+
     return {
-      avgOuts, hitRate, bbAvg, outsArr, bbArr, kArr,
-      avgK, maxK, minK,
+      avgOuts, hitRate, bbAvg, outsArr, bbArr, kArr, hArr,
+      avgK, maxK, minK, avgH,
       oppPerStart: oppKPerStart,
       numStarts: splits.length,
       pcTendency, avgPC, maxPC, minPC, ipCeiling,
@@ -493,10 +496,12 @@ export async function buildPitcherRow(pitcher, date, oppKDays = 7) {
   row.oppKSplits  = oppKSplits;
 
   // K per start from game log
-  row.avgK       = gameLog?.avgK       ?? null;
-  row.maxK       = gameLog?.maxK       ?? null;
-  row.minK       = gameLog?.minK       ?? null;
-  row.kArr       = gameLog?.kArr       ?? [];
+  row.avgK        = gameLog?.avgK        ?? null;
+  row.maxK        = gameLog?.maxK        ?? null;
+  row.minK        = gameLog?.minK        ?? null;
+  row.avgH        = gameLog?.avgH        ?? null;
+  row.kArr        = gameLog?.kArr        ?? [];
+  row.hArr        = gameLog?.hArr        ?? [];
   row.oppPerStart = gameLog?.oppPerStart ?? [];
 
   // Expected Ks: pitcher K% × estimated BF (avg outs / 3 * 4.3)
