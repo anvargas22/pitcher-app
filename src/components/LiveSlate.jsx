@@ -314,6 +314,7 @@ function AutoRow({ r, onUpdateNote, onToggleLock }) {
 
 export default function LiveSlate() {
   const [date, setDate]         = useState(() => new Date().toISOString().split("T")[0]);
+  const [oppKDays, setOppKDays] = useState(7);
   const [rows, setRows]         = useState([]);
   const [status, setStatus]     = useState("idle");
   const [error, setError]       = useState("");
@@ -335,7 +336,7 @@ export default function LiveSlate() {
       const CHUNK = 4;
       for (let i = 0; i < probables.length; i += CHUNK) {
         const chunk = probables.slice(i, i + CHUNK);
-        const results = await Promise.all(chunk.map(p => buildPitcherRow(p, date)));
+        const results = await Promise.all(chunk.map(p => buildPitcherRow(p, date, oppKDays)));
         const valid = results.filter(Boolean);
         setRows(prev => {
           const existing = new Set(prev.map(r => r.playerId));
@@ -352,7 +353,7 @@ export default function LiveSlate() {
       setError(`Fetch failed: ${err.message}`);
       setStatus("error");
     }
-  }, [date]);
+  }, [date, oppKDays]);
 
   const updateNote = useCallback((playerId, note) => {
     setRows(prev => prev.map(r => r.playerId===playerId ? {...r, note} : r));
@@ -397,6 +398,22 @@ export default function LiveSlate() {
             <input type="date" value={date} onChange={e=>setDate(e.target.value)}
               style={{background:"#0f172a",border:"1px solid #334155",color:"#f1f5f9",borderRadius:5,padding:"5px 8px",fontSize:11,fontFamily:"monospace",outline:"none"}}/>
           </div>
+          {/* L7 / L10 toggle */}
+          <div style={{display:"flex", flexDirection:"column", gap:3}}>
+            <label style={{color:"#475569", fontSize:9, letterSpacing:2}}>OPP K% WINDOW</label>
+            <div style={{display:"flex", gap:4}}>
+              {[7, 10].map(d => (
+                <button key={d} onClick={() => setOppKDays(d)} style={{
+                  background: oppKDays===d ? "#7c3aed" : "#1e293b",
+                  color: oppKDays===d ? "#fff" : "#94a3b8",
+                  border: `1px solid ${oppKDays===d ? "#7c3aed" : "#334155"}`,
+                  borderRadius:5, padding:"5px 10px", cursor:"pointer",
+                  fontSize:10, fontWeight:700, fontFamily:"monospace",
+                }}>L{d}</button>
+              ))}
+            </div>
+          </div>
+
           <button onClick={handleFetch} disabled={status==="loading"} style={{
             background:status==="loading"?"#1e293b":"#1d4ed8",
             color:status==="loading"?"#475569":"#fff",
@@ -407,7 +424,7 @@ export default function LiveSlate() {
           </button>
           {status==="done" && (
             <div style={{color:"#4ade80",fontSize:10}}>
-              ✅ {rows.length} pitchers · ⭐ {eliteCount} ELITE · 🔒 {lockCount} locked
+              ✅ {rows.length} pitchers · ⭐ {eliteCount} ELITE · 🔒 {lockCount} locked · Opp K% L{oppKDays}
               {injuryCount > 0 && <span style={{color:"#f87171"}}> · 🚨 {injuryCount} injury flag</span>}
               {weatherCount > 0 && <span style={{color:"#fbbf24"}}> · ⛈️ {weatherCount} weather alert</span>}
             </div>
@@ -425,7 +442,7 @@ export default function LiveSlate() {
               ["⚾ Pitcher K% + BB% + ERA","Season stats from MLB API"],
               ["📊 Game log outs + BB/start","Last 6 starts auto-calculated"],
               ["🎯 Avg pitch count","Range, ceiling estimate, tendency"],
-              ["👥 Opp K% L7","Team batting SO/AB last 7 days"],
+              [`👥 Opp K% L${oppKDays}`,`Team batting SO/AB last ${oppKDays} days`],
               ["🚨 Injury / IL flags","Active roster + IL status check"],
               ["🌧️ Weather at game time","Temp · rain % · wind · indoor flag"],
               ["🔒 Lock suggestions","Auto-grades vs your thresholds"],
