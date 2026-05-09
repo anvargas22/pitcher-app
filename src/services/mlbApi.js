@@ -128,6 +128,7 @@ export async function fetchPitcherGameLog(playerId, numStarts = 6) {
 
     const outsArr = splits.map(s => ipToOuts(s.stat?.inningsPitched || "0.0"));
     const bbArr   = splits.map(s => parseInt(s.stat?.baseOnBalls || 0));
+    const kArr    = splits.map(s => parseInt(s.stat?.strikeOuts || 0));
 
     // Try multiple possible pitch count field names
     const pcArr = splits.map(s => {
@@ -152,8 +153,14 @@ export async function fetchPitcherGameLog(playerId, numStarts = 6) {
       ? (avgPC >= 90 ? "high" : avgPC >= 78 ? "medium" : "low")
       : (avgOuts/3 >= 6 ? "high" : avgOuts/3 >= 5 ? "medium" : "low");
 
+    // K per start stats
+    const avgK    = kArr.length ? Math.round((kArr.reduce((a,b)=>a+b,0)/kArr.length)*10)/10 : null;
+    const maxK    = kArr.length ? Math.max(...kArr) : null;
+    const minK    = kArr.length ? Math.min(...kArr) : null;
+
     return {
-      avgOuts, hitRate, bbAvg, outsArr, bbArr,
+      avgOuts, hitRate, bbAvg, outsArr, bbArr, kArr,
+      avgK, maxK, minK,
       numStarts: splits.length,
       pcTendency, avgPC, maxPC, minPC, ipCeiling,
       // expose raw splits for debugging
@@ -185,6 +192,70 @@ export async function fetchTeamOppK(teamId, days = 7) {
   } catch { return null; }
 }
 
+
+// ── 5. Pitcher handedness ────────────────────────────────────────────────
+export async function fetchPitcherHandedness(playerId) {
+  try {
+    const url = `${BASE}/people/${playerId}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const p = data.people?.[0];
+    if (!p) return null;
+    return p.pitchHand?.code || null; // "R" or "L"
+  } catch { return null; }
+}
+
+// ── 6. Opp team K% by handedness (L7 and L30) ───────────────────────────
+export async function fetchTeamOppKSplits(teamId, pitcherHand, days = 7) {
+  try {
+    const today = new Date();
+    const year = today.getFullYear();
+
+    // L7 window
+    const start7 = new Date(today); start7.setDate(today.getDate() - 7);
+    // L30 window  
+    const start30 = new Date(today); start30.setDate(today.getDate() - 30);
+
+    const [r7, r30] = await Promise.all([
+      fetch(`${BASE}/teams/${teamId}/stats?stats=byDateRange&startDate=${fmtDate(start7)}&endDate=${fmtDate(today)}&group=hitting&season=${year}`),
+      fetch(`${BASE}/teams/${teamId}/stats?stats=byDateRange&startDate=${fmtDate(start30)}&endDate=${fmtDate(today)}&group=hitting&season=${year}`),
+    ]);
+
+    const d7  = await r7.json();
+    const d30 = await r30.json();
+
+    const calcK = (data) => {
+      const s = data.stats?.[0]?.splits?.[0]?.stat;
+      if (!s) return null;
+      const so = parseInt(s.strikeOuts || 0);
+      const ab = parseInt(s.atBats || 1);
+      return ab > 0 ? Math.round((so/ab)*1000)/10 : null;
+    };
+
+    // Handedness split — vs RHP or vs LHP
+    const handSplit = pitcherHand === "L" ? "vsLHP" : "vsRHP";
+    const urlHand = `${BASE}/teams/${teamId}/stats?stats=vsTeam&group=hitting&season=${year}&sitCodes=${handSplit}`;
+    let handK = null;
+    try {
+      const rHand = await fetch(urlHand);
+      const dHand = await rHand.json();
+      handK = calcK(dHand);
+    } catch { handK = null; }
+
+    const k7  = calcK(d7);
+    const k30 = calcK(d30);
+
+    // Trend: compare L7 to L30
+    let trend = "→ Stable";
+    if (k7 && k30) {
+      const diff = k7 - k30;
+      if (diff >= 2) trend = "↗️ Heating up";
+      else if (diff <= -2) trend = "↘️ Cooling off";
+    }
+
+    return { k7, k30, handK, trend, pitcherHand };
+  } catch { return null; }
+}
 // ── 5. Injury check ──────────────────────────────────────────────────────
 export async function fetchInjuryStatus(playerId) {
   try {
@@ -271,10 +342,10 @@ export async function fetchWeather(venueTeam, gameTime) {
   }
 }
 
-// ── 7. Lock suggestions ──────────────────────────────────────────────────
+// ── 7. Lock score + suggestions ─────────────────────────────────────────
 export function suggestLock(row) {
   const suggestions = [];
-  const { pitcherK, oppK, bbPct, bbAvg, bbLine, outsAvg, outsHitRate, pcTendency, avgPC } = row;
+  const { pitcherK, oppK, bbPct, bbAvg, bbLine, outsAvg, outsHitRate, pcTendency, avgPC, injury, weather } = row;
 
   // K suggestions
   if (pitcherK >= 25 && oppK >= 22) suggestions.push("⭐⭐ K MORE — ELITE matchup GREEN/GREEN");
@@ -298,16 +369,77 @@ export function suggestLock(row) {
   return suggestions;
 }
 
+// ── Lock score (0-7) ─────────────────────────────────────────────────────
+export function calcLockScore(row, kLine = null) {
+  let score = 0;
+  const signals = [];
+
+  // 1. Pitcher K% GREEN
+  if (row.pitcherK >= 25) { score++; signals.push("✅ Pitcher K% GREEN"); }
+  else signals.push("❌ Pitcher K% not GREEN");
+
+  // 2. Opp K% GREEN
+  if (row.oppK >= 22) { score++; signals.push("✅ Opp K% GREEN"); }
+  else signals.push("❌ Opp K% not GREEN");
+
+  // 3. K line hit rate ≥67% (if line provided)
+  if (kLine && row.kArr?.length >= 3) {
+    const cleared = row.kArr.filter(k => k > kLine).length;
+    const hr = Math.round((cleared / row.kArr.length) * 100);
+    if (hr >= 67) { score++; signals.push(`✅ K line hit rate ${hr}% (${cleared}/${row.kArr.length})`); }
+    else signals.push(`❌ K line hit rate only ${hr}% (${cleared}/${row.kArr.length})`);
+  } else if (!kLine) {
+    signals.push("⬜ K line not entered yet");
+  }
+
+  // 4. PC tendency HIGH
+  if (row.pcTendency === "high") { score++; signals.push("✅ PC tendency HIGH"); }
+  else signals.push(`❌ PC tendency ${row.pcTendency?.toUpperCase()}`);
+
+  // 5. No injury flag
+  if (!row.injury) { score++; signals.push("✅ No injury flag"); }
+  else signals.push("🚨 Injury flagged");
+
+  // 6. No weather alert
+  if (!row.weather?.alert) { score++; signals.push("✅ No weather alert"); }
+  else signals.push(`⚠️ Weather alert: ${row.weather?.summary}`);
+
+  // 7. ERA stable (under 4.00)
+  if (row.era !== undefined && row.era < 4.00) { score++; signals.push(`✅ ERA stable (${row.era?.toFixed(2)})`); }
+  else signals.push(`❌ ERA elevated (${row.era?.toFixed(2)})`);
+
+  const grade = score >= 6 ? "🔒🔒 LOCK"
+    : score >= 4 ? "🔒 LEAN"
+    : score >= 2 ? "⚠️ SITUATIONAL"
+    : "❌ FADE";
+
+  return { score, maxScore: 7, grade, signals };
+}
+
+// ── K line hit rate ──────────────────────────────────────────────────────
+export function calcKHitRate(kArr, line) {
+  if (!kArr?.length || !line) return null;
+  const cleared = kArr.filter(k => k > line).length;
+  return Math.round((cleared / kArr.length) * 100);
+}
+
 // ── 8. Build full row ────────────────────────────────────────────────────
 export async function buildPitcherRow(pitcher, date, oppKDays = 7) {
   const { playerId, name, opp, oppTeamId, venueTeam, gameTime } = pitcher;
 
-  const [season, gameLog, oppK, injury, weather] = await Promise.all([
+  // First get handedness so we can use it for the splits fetch
+  const [season, gameLog, hand, injury, weather] = await Promise.all([
     fetchPitcherSeasonStats(playerId),
     fetchPitcherGameLog(playerId),
-    oppTeamId ? fetchTeamOppK(oppTeamId, oppKDays) : Promise.resolve(null),
+    fetchPitcherHandedness(playerId),
     fetchInjuryStatus(playerId),
     fetchWeather(venueTeam, gameTime),
+  ]);
+
+  // Now fetch opp K with handedness context
+  const [oppK, oppKSplits] = await Promise.all([
+    oppTeamId ? fetchTeamOppK(oppTeamId, oppKDays) : Promise.resolve(null),
+    oppTeamId ? fetchTeamOppKSplits(oppTeamId, hand, oppKDays) : Promise.resolve(null),
   ]);
 
   if (!season) return null;
@@ -338,6 +470,22 @@ export async function buildPitcherRow(pitcher, date, oppKDays = 7) {
     autoFetched: true,
   };
 
+  row.pitcherHand = hand;
+  row.oppKSplits  = oppKSplits;
+
+  // K per start from game log
+  row.avgK  = gameLog?.avgK  ?? null;
+  row.maxK  = gameLog?.maxK  ?? null;
+  row.minK  = gameLog?.minK  ?? null;
+  row.kArr  = gameLog?.kArr  ?? [];
+
+  // Expected Ks: pitcher K% × estimated BF (avg outs / 3 * 4.3)
+  const estIP = (gameLog?.avgOuts ?? 0) / 3;
+  const estBF = estIP * 4.3;
+  row.expectedK = estBF > 0 ? Math.round((season.kPct / 100) * estBF * 10) / 10 : null;
+
   row.lockSuggestions = suggestLock(row);
   return row;
 }
+
+// ── K line hit rate calculator ───────────────────────────────────────────
